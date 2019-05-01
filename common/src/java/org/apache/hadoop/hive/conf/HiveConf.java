@@ -86,6 +86,7 @@ public class HiveConf extends Configuration {
   private static URL hiveSiteURL = null;
   private static URL hivemetastoreSiteUrl = null;
   private static URL hiveServer2SiteUrl = null;
+  private static URL hiveSideCarURL = null;
 
   private static byte[] confVarByteArray = null;
 
@@ -4703,7 +4704,10 @@ public class HiveConf extends Configuration {
             "This parameter enables a number of optimizations when running on blobstores:\n" +
             "(1) If hive.blobstore.use.blobstore.as.scratchdir is false, force the last Hive job to write to the blobstore.\n" +
             "This is a performance optimization that forces the final FileSinkOperator to write to the blobstore.\n" +
-            "See HIVE-15121 for details.");
+            "See HIVE-15121 for details."),
+
+    HIVE_ADDITIONAL_CONFIG_FILES("hive.additional.config.files", "",
+            "The names of additional config files, such as ldap-site.xml,spark-site.xml, etc in comma separated list." );
 
     public final String varname;
     public final String altName;
@@ -5474,6 +5478,18 @@ public class HiveConf extends Configuration {
       addResource(hiveServer2SiteUrl);
     }
 
+    String val = this.getVar(HiveConf.ConfVars.HIVE_ADDITIONAL_CONFIG_FILES);
+    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+
+    if ( val != null && !val.isEmpty()) {
+      String[] configFiles = val.split(",");
+      for (String config : configFiles) {
+        URL configURL = findConfigFile(classLoader, config, true);
+        if (configURL != null) {
+          addResource(configURL);
+        }
+      }
+    }
     // Overlay the values of any system properties and manual overrides
     applySystemProperties();
 
@@ -5853,6 +5869,10 @@ public class HiveConf extends Configuration {
 
   public static URL getHiveServer2SiteLocation() {
     return hiveServer2SiteUrl;
+  }
+
+  public static URL getHiveSideCarURL(){
+    return hiveSideCarURL;
   }
 
   /**
