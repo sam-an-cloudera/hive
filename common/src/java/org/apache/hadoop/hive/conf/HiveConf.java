@@ -4707,7 +4707,8 @@ public class HiveConf extends Configuration {
             "See HIVE-15121 for details."),
 
     HIVE_ADDITIONAL_CONFIG_FILES("hive.additional.config.files", "",
-            "The names of additional config files, such as ldap-site.xml,spark-site.xml, etc in comma separated list." );
+            "The names of additional config files, such as ldap-site.xml," +
+                    "spark-site.xml, etc in comma separated list.");
 
     public final String varname;
     public final String altName;
@@ -5481,7 +5482,7 @@ public class HiveConf extends Configuration {
     String val = this.getVar(HiveConf.ConfVars.HIVE_ADDITIONAL_CONFIG_FILES);
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
 
-    if ( val != null && !val.isEmpty()) {
+    if (val != null && !val.isEmpty()) {
       String[] configFiles = val.split(",");
       for (String config : configFiles) {
         URL configURL = findConfigFile(classLoader, config, true);
