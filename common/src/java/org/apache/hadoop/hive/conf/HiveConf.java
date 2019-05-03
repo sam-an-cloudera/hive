@@ -86,7 +86,6 @@ public class HiveConf extends Configuration {
   private static URL hiveSiteURL = null;
   private static URL hivemetastoreSiteUrl = null;
   private static URL hiveServer2SiteUrl = null;
-  private static URL hiveSideCarURL = null;
 
   private static byte[] confVarByteArray = null;
 
@@ -5870,10 +5869,6 @@ public class HiveConf extends Configuration {
 
   public static URL getHiveServer2SiteLocation() {
     return hiveServer2SiteUrl;
-  }
-
-  public static URL getHiveSideCarURL(){
-    return hiveSideCarURL;
   }
 
   /**
