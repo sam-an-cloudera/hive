@@ -91,6 +91,55 @@ public class SharedCache {
   private static long currentCacheSizeInBytes = 0;
   private static HashMap<Class<?>, ObjectEstimator> sizeEstimators = null;
 
+
+  private Map<String, LRUCacheNode> sampleMap = new TreeMap<>();
+
+  public void getTable(String tablename){
+    try{
+      cacheLock.writeLock().lock();
+      LRUCacheNode node  = sampleMap.get(tablename);
+      if(node == null){
+
+      }else{
+        //move entry to head of lru
+      }
+    }
+    finally {
+      cacheLock.writeLock().unlock();
+    }
+  }
+  enum ObjectType{
+    Catalog,
+    Database,
+    Table
+  }
+  private static class AbstractCacheEntry{
+
+  }
+
+  private static class LRUCache{
+    private LRUCacheNode head;
+    private LRUCacheNode tail;
+
+    void moveToHead(LRUCacheNode n){
+
+    }
+
+  }
+  private static class LRUCacheNode{
+    LRUCacheNode prev;
+    LRUCacheNode next;
+    String key;
+    ObjectType type;
+    AbstractCacheEntry object;
+    LRUCacheNode(String k, ObjectType ot, AbstractCacheEntry ace){
+       prev = next = null;
+       key = k;
+       type = ot;
+       object = ace;
+    }
+  }
+
   enum StatsType {
     ALL(0), ALLBUTDEFAULT(1), PARTIAL(2);
 
