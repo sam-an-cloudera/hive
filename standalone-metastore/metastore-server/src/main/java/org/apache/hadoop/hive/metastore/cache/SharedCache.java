@@ -37,7 +37,6 @@ import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.Warehouse;
-import org.apache.hadoop.hive.metastore.HiveMetaException;
 import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.StatObjectConverter;
 import org.apache.hadoop.hive.metastore.api.AggrStats;
@@ -62,7 +61,6 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import static org.apache.hadoop.hive.metastore.cache.CachedStore.partNameToVals;
 import static org.apache.hadoop.hive.metastore.utils.StringUtils.normalizeIdentifier;
 
 public class SharedCache {
@@ -79,7 +77,7 @@ public class SharedCache {
   private AtomicBoolean isDatabaseCacheDirty = new AtomicBoolean(false);
 
   // For caching TableWrapper objects. Key is aggregate of database name and table name
-  private Map<String, LRUCacheNode> tableCache = new TreeMap<>();
+  private Map<String, LRUNode> tableCache = new TreeMap<>();
   private boolean isTableCachePrewarmed = false;
   private HashSet<String> tablesDeletedDuringPrewarm = new HashSet<>();
   private AtomicBoolean isTableCacheDirty = new AtomicBoolean(false);
@@ -90,16 +88,15 @@ public class SharedCache {
   private static long maxCacheSizeInBytes = -1;
   private static long currentCacheSizeInBytes = 0;
   private static HashMap<Class<?>, ObjectEstimator> sizeEstimators = null;
-  private LRUCache lru = null;
+  private LRUChain lru = new LRUChain();
 
   //TODO: locking mechanism
   public TableWrapper getTableWrapper(String tblKey) {
-    LRUCacheNode node = tableCache.get(tblKey);
-    //TODO: update LRU
-
+    LRUNode node = tableCache.get(tblKey);
     if( node == null){
       return null;
     }
+    lru.moveToHead(node);
 
     AbstractCacheEntry ace = node.object;
     TableCacheEntry tce = (TableCacheEntry) ace;
@@ -108,12 +105,13 @@ public class SharedCache {
 
   public void putTableWrapper(String tblKey, TableWrapper tw){
     TableCacheEntry tce = new TableCacheEntry(tw);
-    LRUCacheNode node = new LRUCacheNode(tblKey, ObjectType.Table, tce);
+    LRUNode node = new LRUNode(tblKey, ObjectType.Table, tce);
+    lru.moveToHead(node);
     tableCache.put(tblKey, node);
   }
 
   public TableWrapper removeTableWrapper(String tblKey){
-    LRUCacheNode node = tableCache.remove(tblKey);
+    LRUNode node = tableCache.remove(tblKey);
     if( node == null){
       return null;
     }
@@ -122,9 +120,9 @@ public class SharedCache {
   }
 
   public Collection<TableWrapper> getAllTableWrappers(){
-    Collection<LRUCacheNode> allNodes = tableCache.values();
+    Collection<LRUNode> allNodes = tableCache.values();
     Collection<TableWrapper> tws = new ArrayList<>();
-    for( LRUCacheNode n : allNodes){
+    for( LRUNode n : allNodes){
       tws.add(((TableCacheEntry)n.object).tw);
     }
     return tws;
@@ -155,29 +153,42 @@ public class SharedCache {
       tw = tw1;
     }
   }
-  private static class LRUCache{
-    private LRUCacheNode head;
-    private LRUCacheNode tail;
+  private static class LRUChain {
+    private LRUNode head;
+    private LRUNode tail;
 
-    LRUCache(){
-      head = new LRUCacheNode("DummyHead", ObjectType.Dummy, null);
-      tail = new LRUCacheNode("DummyTail", ObjectType.Dummy, null);
+    LRUChain(){
+      head = new LRUNode("DummyHead", ObjectType.Dummy, null);
+      tail = new LRUNode("DummyTail", ObjectType.Dummy, null);
       head.next = tail;
       tail.prev = head;
     }
-    void moveToHead(LRUCacheNode n){
-       LRUCacheNode prev = n.prev;
-       LRUCacheNode next = n.next;
 
-       head.next = n;
-       n.prev = head;
-       prev.next = next;
-       next.prev = prev;
+    void moveToHead(LRUNode n){
+      if( head.next == tail){
+        head.next = n;
+        n.prev = head;
+        tail.prev = n;
+        n.next = tail;
+        return;
+      }
+      LRUNode prev = n.prev;
+      LRUNode next = n.next;
+      prev.next = next;
+      next.prev = prev;
+
+      head.next = n;
+      n.prev = head;
+
+
     }
 
     void removeFromTail(){
-      LRUCacheNode prev = tail.prev;
-      LRUCacheNode pp = prev.prev;
+      if( tail.prev == head ){
+        return;
+      }
+      LRUNode prev = tail.prev;
+      LRUNode pp = prev.prev;
 
       tail.prev = pp;
       pp.next = tail;
@@ -186,13 +197,13 @@ public class SharedCache {
     }
 
   }
-  private static class LRUCacheNode{
-    LRUCacheNode prev;
-    LRUCacheNode next;
+  private static class LRUNode {
+    LRUNode prev;
+    LRUNode next;
     String key;
     ObjectType type;
     AbstractCacheEntry object;
-    LRUCacheNode(String k, ObjectType ot, AbstractCacheEntry ace){
+    LRUNode(String k, ObjectType ot, AbstractCacheEntry ace){
        prev = next = null;
        key = k;
        type = ot;
@@ -1560,7 +1571,7 @@ public class SharedCache {
       return false;
     }
     //TODO: double check the logic here.
-    Map<String, LRUCacheNode> newCacheForDB = new TreeMap<>();
+    Map<String, LRUNode> newCacheForDB = new TreeMap<>();
     for (Table tbl : tables) {
       String tblName = StringUtils.normalizeIdentifier(tbl.getTableName());
       TableWrapper tblWrapper = getTableWrapper(CacheUtils.buildTableKey(catName, dbName, tblName));
@@ -1569,12 +1580,12 @@ public class SharedCache {
       } else {
         tblWrapper = createTableWrapper(catName, dbName, tblName, tbl);
       }
-      LRUCacheNode node = new LRUCacheNode(tblName, ObjectType.Table, AbstractCacheEntry.create(ObjectType.Table, tblWrapper));
+      LRUNode node = new LRUNode(tblName, ObjectType.Table, AbstractCacheEntry.create(ObjectType.Table, tblWrapper));
       newCacheForDB.put(CacheUtils.buildTableKey(catName, dbName, tblName), node);
     }
     try {
       cacheLock.writeLock().lock();
-      Iterator<Entry<String, LRUCacheNode>> entryIterator = tableCache.entrySet().iterator();
+      Iterator<Entry<String, LRUNode>> entryIterator = tableCache.entrySet().iterator();
       while (entryIterator.hasNext()) {
         String key = entryIterator.next().getKey();
         if (key.startsWith(CacheUtils.buildDbKeyWithDelimiterSuffix(catName, dbName))) {
