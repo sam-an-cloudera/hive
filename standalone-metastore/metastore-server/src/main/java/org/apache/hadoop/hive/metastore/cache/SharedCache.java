@@ -77,7 +77,7 @@ public class SharedCache {
   private AtomicBoolean isDatabaseCacheDirty = new AtomicBoolean(false);
 
   // For caching TableWrapper objects. Key is aggregate of database name and table name
-  private Map<String, LRUNode> tableCache = new TreeMap<>();
+  private Map<String, TableWrapper> tableCache = new TreeMap<>();
   private boolean isTableCachePrewarmed = false;
   private HashSet<String> tablesDeletedDuringPrewarm = new HashSet<>();
   private AtomicBoolean isTableCacheDirty = new AtomicBoolean(false);
@@ -92,95 +92,62 @@ public class SharedCache {
 
   //TODO: locking mechanism
   public TableWrapper getTableWrapper(String tblKey) {
-    LRUNode node = tableCache.get(tblKey);
+    TableWrapper node = tableCache.get(tblKey);
     if( node == null){
       return null;
     }
+    lru.deleteNode(node);
     lru.moveToHead(node);
-
-    AbstractCacheEntry ace = node.object;
-    TableCacheEntry tce = (TableCacheEntry) ace;
-    return tce.tw;
+    return node;
   }
 
   public void putTableWrapper(String tblKey, TableWrapper tw){
-    TableCacheEntry tce = new TableCacheEntry(tw);
-    LRUNode node = new LRUNode(tblKey, ObjectType.Table, tce);
+    TableWrapper node = tableCache.get(tblKey);
+    if( node == null){
+      tableCache.put(tblKey, tw);
+    }
+    tableCache.put(tblKey, tw);
+    lru.deleteNode(node);
     lru.moveToHead(node);
-    tableCache.put(tblKey, node);
   }
 
   public TableWrapper removeTableWrapper(String tblKey){
-    LRUNode node = tableCache.remove(tblKey);
+    TableWrapper node = tableCache.remove(tblKey);
     if( node == null){
       return null;
     }
-    TableCacheEntry tce =  (TableCacheEntry)node.object;
-    return tce.tw;
+    lru.deleteNode(node);
+    return node;
   }
 
   public Collection<TableWrapper> getAllTableWrappers(){
-    Collection<LRUNode> allNodes = tableCache.values();
-    Collection<TableWrapper> tws = new ArrayList<>();
-    for( LRUNode n : allNodes){
-      tws.add(((TableCacheEntry)n.object).tw);
-    }
-    return tws;
-  }
-  
-  enum ObjectType{
-    Catalog,
-    Database,
-    Table,
-    Dummy
-  }
-  private static class AbstractCacheEntry{
-
-    public static AbstractCacheEntry create(ObjectType ot, Object o){
-      if( ot == ObjectType.Table){
-        assert(o instanceof TableWrapper);
-        TableCacheEntry tce = new TableCacheEntry((TableWrapper)o);
-        return tce;
-      }else{
-        return null;
-      }
-    }
+    Collection<TableWrapper> allNodes = tableCache.values();
+    return allNodes;
   }
 
-  private static class TableCacheEntry extends AbstractCacheEntry{
-    TableWrapper tw;
-    TableCacheEntry(TableWrapper tw1){
-      tw = tw1;
-    }
-  }
   private static class LRUChain {
     private LRUNode head;
     private LRUNode tail;
 
     LRUChain(){
-      head = new LRUNode("DummyHead", ObjectType.Dummy, null);
-      tail = new LRUNode("DummyTail", ObjectType.Dummy, null);
+      head = new LRUNode();
+      tail = new LRUNode();
       head.next = tail;
       tail.prev = head;
     }
 
-    void moveToHead(LRUNode n){
-      if( head.next == tail){
-        head.next = n;
-        n.prev = head;
-        tail.prev = n;
-        n.next = tail;
-        return;
-      }
+    void deleteNode(LRUNode n){
       LRUNode prev = n.prev;
       LRUNode next = n.next;
       prev.next = next;
       next.prev = prev;
-
+    }
+    void moveToHead(LRUNode n){
+      LRUNode next = head.next;
       head.next = n;
       n.prev = head;
-
-
+      next.prev = n;
+      n.next = next;
     }
 
     void removeFromTail(){
@@ -200,14 +167,9 @@ public class SharedCache {
   private static class LRUNode {
     LRUNode prev;
     LRUNode next;
-    String key;
-    ObjectType type;
-    AbstractCacheEntry object;
-    LRUNode(String k, ObjectType ot, AbstractCacheEntry ace){
+
+    LRUNode(){
        prev = next = null;
-       key = k;
-       type = ot;
-       object = ace;
     }
   }
 
@@ -251,7 +213,7 @@ public class SharedCache {
     return estimator;
   }
 
-  static class TableWrapper {
+  static class TableWrapper extends LRUNode {
     Table t;
     String location;
     Map<String, String> parameters;
@@ -280,6 +242,7 @@ public class SharedCache {
     private AtomicBoolean isAggrPartitionColStatsCacheDirty = new AtomicBoolean(false);
 
     TableWrapper(Table t, byte[] sdHash, String location, Map<String, String> parameters) {
+      super();
       this.t = t;
       this.sdHash = sdHash;
       this.location = location;
@@ -1571,7 +1534,7 @@ public class SharedCache {
       return false;
     }
     //TODO: double check the logic here.
-    Map<String, LRUNode> newCacheForDB = new TreeMap<>();
+    Map<String, TableWrapper> newCacheForDB = new TreeMap<>();
     for (Table tbl : tables) {
       String tblName = StringUtils.normalizeIdentifier(tbl.getTableName());
       TableWrapper tblWrapper = getTableWrapper(CacheUtils.buildTableKey(catName, dbName, tblName));
@@ -1580,12 +1543,11 @@ public class SharedCache {
       } else {
         tblWrapper = createTableWrapper(catName, dbName, tblName, tbl);
       }
-      LRUNode node = new LRUNode(tblName, ObjectType.Table, AbstractCacheEntry.create(ObjectType.Table, tblWrapper));
-      newCacheForDB.put(CacheUtils.buildTableKey(catName, dbName, tblName), node);
+      newCacheForDB.put(CacheUtils.buildTableKey(catName, dbName, tblName), tblWrapper);
     }
     try {
       cacheLock.writeLock().lock();
-      Iterator<Entry<String, LRUNode>> entryIterator = tableCache.entrySet().iterator();
+      Iterator<Entry<String, TableWrapper>> entryIterator = tableCache.entrySet().iterator();
       while (entryIterator.hasNext()) {
         String key = entryIterator.next().getKey();
         if (key.startsWith(CacheUtils.buildDbKeyWithDelimiterSuffix(catName, dbName))) {
