@@ -35,7 +35,6 @@ import java.util.TreeMap;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
 import com.google.common.cache.Weigher;
 import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
@@ -126,8 +125,7 @@ public class SharedCache {
       tableCache = CacheBuilder.newBuilder().maximumWeight(maxSharedCacheSizeInBytes)
           .weigher(new Weigher<String, TableWrapper>() {
             @Override public int weigh(String key, TableWrapper value) {
-              ObjectEstimator tblWrapperSizeEstimator = getMemorySizeEstimator(TableWrapper.class);
-              return tblWrapperSizeEstimator.estimate(value, sizeEstimators);
+              return value.getSize();
             }
           }).build();
     }
@@ -148,6 +146,11 @@ public class SharedCache {
     String location;
     Map<String, String> parameters;
     byte[] sdHash;
+    int otherSize;
+    int tableColStatsCacheSize;
+    int partitionCacheSize;
+    int partitionColStatsCacheSize;
+    int aggrColStatsCacheSize;
     ReentrantReadWriteLock tableLock = new ReentrantReadWriteLock(true);
     // For caching column stats for an unpartitioned table
     // Key is column name and the value is the col stat object
@@ -176,6 +179,20 @@ public class SharedCache {
       this.sdHash = sdHash;
       this.location = location;
       this.parameters = parameters;
+      tableColStatsCacheSize = 0;
+      partitionCacheSize = 0;
+      partitionColStatsCacheSize = 0;
+      aggrColStatsCacheSize = 0;
+      ObjectEstimator oe = getMemorySizeEstimator(TableWrapper.class);
+      otherSize = oe.estimate(this, sizeEstimators);
+    }
+
+    public int getSize(){
+      return  otherSize
+            + tableColStatsCacheSize
+            + partitionCacheSize
+            + partitionColStatsCacheSize
+            + aggrColStatsCacheSize;
     }
 
     public Table getTable() {
@@ -333,9 +350,11 @@ public class SharedCache {
             iterator.remove();
           }
         }
+        updateMemberSize(MemberName.PARTITION_COL_STATS_CACHE, null);
         // Invalidate cached aggregate stats
         if (!aggrColStatsCache.isEmpty()) {
           aggrColStatsCache.clear();
+          updateMemberSize(MemberName.PARTITION_COL_STATS_CACHE, 0);
         }
       } finally {
         tableLock.writeLock().unlock();
@@ -359,9 +378,42 @@ public class SharedCache {
         tableLock.writeLock().lock();
         removePartition(partVals, sharedCache);
         cachePartition(newPart, sharedCache);
+        updateMemberSize(MemberName.PARTITION_CACHE, null);
       } finally {
         tableLock.writeLock().unlock();
       }
+    }
+
+    private enum MemberName{
+      TABLE_COL_STATS_CACHE,
+      PARTITION_CACHE,
+      PARTITION_COL_STATS_CACHE,
+      AGGR_COL_STATS_CACHE
+    }
+    private void updateMemberSize(MemberName mn, Integer size){
+      ObjectEstimator oe = null;
+      switch (mn) {
+      case TABLE_COL_STATS_CACHE:
+        oe = getMemorySizeEstimator(tableColStatsCache.getClass());
+        tableColStatsCacheSize = size == null ? oe.estimate(this.tableColStatsCache, sizeEstimators) : size;
+        break;
+      case PARTITION_CACHE:
+        oe = getMemorySizeEstimator(partitionCache.getClass());
+        partitionCacheSize = size == null ? oe.estimate(this.partitionCache, sizeEstimators) : size;
+        break;
+      case PARTITION_COL_STATS_CACHE:
+        oe = getMemorySizeEstimator(partitionColStatsCache.getClass());
+        partitionColStatsCacheSize = size == null ? oe.estimate(this.partitionColStatsCache, sizeEstimators) : size;
+        break;
+      case AGGR_COL_STATS_CACHE:
+        oe = getMemorySizeEstimator(aggrColStatsCache.getClass());
+        aggrColStatsCacheSize = size == null ? oe.estimate(this.aggrColStatsCache, sizeEstimators) : size;
+        break;
+      default:
+
+        break;
+      }
+
     }
 
     public void alterPartitionAndStats(List<String> partVals, SharedCache sharedCache, long writeId,
@@ -379,6 +431,7 @@ public class SharedCache {
         removePartition(partVals, sharedCache);
         cachePartition(newPart, sharedCache);
         updatePartitionColStats(partVals, colStatsObjs);
+        updateMemberSize(MemberName.PARTITION_COL_STATS_CACHE, null);
       } finally {
         tableLock.writeLock().unlock();
       }
@@ -419,6 +472,7 @@ public class SharedCache {
           newPartitionCache.put(key, wrapper);
         }
         partitionCache = newPartitionCache;
+        updateMemberSize(MemberName.PARTITION_CACHE, null);
       } finally {
         tableLock.writeLock().unlock();
       }
@@ -431,6 +485,7 @@ public class SharedCache {
           // Get old stats object if present
           String key = colStatObj.getColName();
           ColumnStatisticsObj oldStatsObj = tableColStatsCache.get(key);
+          //TODO: Handle this logic - remove the memory check. With LRU, we don't need this any more.
           if (oldStatsObj != null) {
             // Update existing stat object's field
             StatObjectConverter.setFieldsIntoOldStats(oldStatsObj, colStatObj);
@@ -459,6 +514,7 @@ public class SharedCache {
             tableColStatsCache.put(key, colStatObj.deepCopy());
           }
         }
+        updateMemberSize(MemberName.TABLE_COL_STATS_CACHE, null);
         isTableColStatsCacheDirty.set(true);
         return true;
       } finally {
@@ -482,6 +538,7 @@ public class SharedCache {
           newTableColStatsCache.put(key, colStatObj.deepCopy());
         }
         tableColStatsCache = newTableColStatsCache;
+        updateMemberSize(MemberName.TABLE_COL_STATS_CACHE, null);
       } finally {
         tableLock.writeLock().unlock();
       }
@@ -511,9 +568,12 @@ public class SharedCache {
         tableLock.writeLock().lock();
         if (colName == null) {
           tableColStatsCache.clear();
+          updateMemberSize(MemberName.TABLE_COL_STATS_CACHE, 0);
         } else {
           tableColStatsCache.remove(colName);
+          updateMemberSize(MemberName.TABLE_COL_STATS_CACHE, null);
         }
+
         isTableColStatsCacheDirty.set(true);
       } finally {
         tableLock.writeLock().unlock();
@@ -524,6 +584,7 @@ public class SharedCache {
       try {
         tableLock.writeLock().lock();
         tableColStatsCache.clear();
+        updateMemberSize(MemberName.TABLE_COL_STATS_CACHE, 0);
         isTableColStatsCacheDirty.set(true);
       } finally {
         tableLock.writeLock().unlock();
@@ -626,32 +687,15 @@ public class SharedCache {
           } else {
             // No stats exist for this key; add a new object to the cache
             // TODO: get rid of deepCopy after making sure callers don't use references
-            if (maxCacheSizeInBytes > 0) {
-              ObjectEstimator ptnColStatsSizeEstimator =
-                  getMemorySizeEstimator(ColumnStatisticsObj.class);
-              long estimatedMemUsage =
-                  ptnColStatsSizeEstimator.estimate(colStatObj, sizeEstimators);
-              LOG.trace("Memory needed to cache Partition Column Statistics Object: {} is {} bytes",
-                  colStatObj, estimatedMemUsage);
-              if (isCacheMemoryFull(estimatedMemUsage)) {
-                LOG.debug(
-                    "Cannot cache Partition Column Statistics Object: {}. Memory needed is {} bytes, "
-                    + "whereas the memory remaining is: {} bytes.",
-                    colStatObj, estimatedMemUsage,
-                    (0.8 * maxCacheSizeInBytes - currentCacheSizeInBytes));
-                return false;
-              } else {
-                currentCacheSizeInBytes += estimatedMemUsage;
-              }
-              LOG.trace("Current cache size: {} bytes", currentCacheSizeInBytes);
-            }
             partitionColStatsCache.put(key, colStatObj.deepCopy());
           }
         }
+        updateMemberSize(MemberName.PARTITION_COL_STATS_CACHE, null);
         isPartitionColStatsCacheDirty.set(true);
         // Invalidate cached aggregate stats
         if (!aggrColStatsCache.isEmpty()) {
           aggrColStatsCache.clear();
+          updateMemberSize(MemberName.AGGR_COL_STATS_CACHE, 0);
         }
       } finally {
         tableLock.writeLock().unlock();
@@ -663,10 +707,12 @@ public class SharedCache {
       try {
         tableLock.writeLock().lock();
         partitionColStatsCache.remove(CacheUtils.buildPartitonColStatsCacheKey(partVals, colName));
+        updateMemberSize(MemberName.PARTITION_COL_STATS_CACHE, null);
         isPartitionColStatsCacheDirty.set(true);
         // Invalidate cached aggregate stats
         if (!aggrColStatsCache.isEmpty()) {
           aggrColStatsCache.clear();
+          updateMemberSize(MemberName.AGGR_COL_STATS_CACHE, 0);
         }
       } finally {
         tableLock.writeLock().unlock();
@@ -677,10 +723,12 @@ public class SharedCache {
       try {
         tableLock.writeLock().lock();
         partitionColStatsCache.clear();
+        updateMemberSize(MemberName.PARTITION_COL_STATS_CACHE, 0);
         isPartitionColStatsCacheDirty.set(true);
         // Invalidate cached aggregate stats
         if (!aggrColStatsCache.isEmpty()) {
           aggrColStatsCache.clear();
+          updateMemberSize(MemberName.AGGR_COL_STATS_CACHE, 0);
         }
       } finally {
         tableLock.writeLock().unlock();
@@ -718,6 +766,7 @@ public class SharedCache {
           }
         }
         partitionColStatsCache = newPartitionColStatsCache;
+        updateMemberSize(MemberName.PARTITION_COL_STATS_CACHE, null);
       } finally {
         tableLock.writeLock().unlock();
       }
@@ -771,6 +820,7 @@ public class SharedCache {
             }
           }
         }
+        updateMemberSize(MemberName.AGGR_COL_STATS_CACHE, null);
         isAggrPartitionColStatsCacheDirty.set(true);
       } finally {
         tableLock.writeLock().unlock();
@@ -833,6 +883,7 @@ public class SharedCache {
           }
         }
         aggrColStatsCache = newAggrColStatsCache;
+        updateMemberSize(MemberName.AGGR_COL_STATS_CACHE, null);
       } finally {
         tableLock.writeLock().unlock();
       }
@@ -1330,6 +1381,7 @@ public class SharedCache {
       if (!isTableCachePrewarmed) {
         tablesDeletedDuringPrewarm.add(CacheUtils.buildTableKey(catName, dbName, tblName));
       }
+      //TODO: handle table removal
       TableWrapper tblWrapper =
           tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper == null) {
