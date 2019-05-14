@@ -473,32 +473,12 @@ public class SharedCache {
           // Get old stats object if present
           String key = colStatObj.getColName();
           ColumnStatisticsObj oldStatsObj = tableColStatsCache.get(key);
-          //TODO: Handle this logic - remove the memory check. With LRU, we don't need this any more.
           if (oldStatsObj != null) {
             // Update existing stat object's field
             StatObjectConverter.setFieldsIntoOldStats(oldStatsObj, colStatObj);
           } else {
             // No stats exist for this key; add a new object to the cache
             // TODO: get rid of deepCopy after making sure callers don't use references
-            if (maxCacheSizeInBytes > 0) {
-              ObjectEstimator tblColStatsSizeEstimator =
-                  getMemorySizeEstimator(ColumnStatisticsObj.class);
-              long estimatedMemUsage =
-                  tblColStatsSizeEstimator.estimate(colStatObj, sizeEstimators);
-              LOG.trace("Memory needed to cache Table Column Statistics Object: {} is {} bytes",
-                  colStatObj, estimatedMemUsage);
-              if (isCacheMemoryFull(estimatedMemUsage)) {
-                LOG.debug(
-                    "Cannot cache Table Column Statistics Object: {}. Memory needed is {} bytes, "
-                        + "whereas the memory remaining is: {} bytes.",
-                    colStatObj, estimatedMemUsage,
-                    (0.8 * maxCacheSizeInBytes - currentCacheSizeInBytes));
-                return false;
-              } else {
-                currentCacheSizeInBytes += estimatedMemUsage;
-              }
-              LOG.trace("Current cache size: {} bytes", currentCacheSizeInBytes);
-            }
             tableColStatsCache.put(key, colStatObj.deepCopy());
           }
         }
@@ -1236,23 +1216,6 @@ public class SharedCache {
       return false;
     }
     TableWrapper tblWrapper = createTableWrapper(catName, dbName, tableName, table);
-    if (maxCacheSizeInBytes > 0) {
-      ObjectEstimator tblWrapperSizeEstimator = getMemorySizeEstimator(TableWrapper.class);
-      long estimatedMemUsage = tblWrapperSizeEstimator.estimate(tblWrapper, sizeEstimators);
-      LOG.debug("Memory needed to cache Database: {}'s Table: {}, is {} bytes", dbName, tableName,
-          estimatedMemUsage);
-      if (isCacheMemoryFull(estimatedMemUsage)) {
-        LOG.debug(
-            "Cannot cache Database: {}'s Table: {}. Memory needed is {} bytes, "
-                + "whereas the memory we have remaining is: {} bytes.",
-            dbName, tableName, estimatedMemUsage,
-            (0.8 * maxCacheSizeInBytes - currentCacheSizeInBytes));
-        return false;
-      } else {
-        currentCacheSizeInBytes += estimatedMemUsage;
-      }
-      LOG.debug("Current cache size: {} bytes", currentCacheSizeInBytes);
-    }
     if (!table.isSetPartitionKeys() && (tableColStats != null)) {
       if (table.getPartitionKeys().isEmpty() && (tableColStats != null)) {
         return false;
@@ -1294,10 +1257,6 @@ public class SharedCache {
     } finally {
       cacheLock.writeLock().unlock();
     }
-  }
-
-  private static boolean isCacheMemoryFull(long estimatedMemUsage) {
-    return (0.8*maxCacheSizeInBytes) < (currentCacheSizeInBytes + estimatedMemUsage);
   }
 
   public void completeTableCachePrewarm() {
