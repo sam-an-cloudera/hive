@@ -230,16 +230,47 @@ public class SharedCache {
     boolean sameDatabase(String catName, String dbName) {
       return catName.equals(t.getCatName()) && dbName.equals(t.getDbName());
     }
+    private enum MemberName{
+      TABLE_COL_STATS_CACHE,
+      PARTITION_CACHE,
+      PARTITION_COL_STATS_CACHE,
+      AGGR_COL_STATS_CACHE
+    }
+    private void updateMemberSize(MemberName mn, Integer size){
+      ObjectEstimator oe = null;
+      switch (mn) {
+      case TABLE_COL_STATS_CACHE:
+        oe = getMemorySizeEstimator(tableColStatsCache.getClass());
+        tableColStatsCacheSize = size == null ? oe.estimate(this.tableColStatsCache, sizeEstimators) : size;
+        break;
+      case PARTITION_CACHE:
+        oe = getMemorySizeEstimator(partitionCache.getClass());
+        partitionCacheSize = size == null ? oe.estimate(this.partitionCache, sizeEstimators) : size;
+        break;
+      case PARTITION_COL_STATS_CACHE:
+        oe = getMemorySizeEstimator(partitionColStatsCache.getClass());
+        partitionColStatsCacheSize = size == null ? oe.estimate(this.partitionColStatsCache, sizeEstimators) : size;
+        break;
+      case AGGR_COL_STATS_CACHE:
+        oe = getMemorySizeEstimator(aggrColStatsCache.getClass());
+        aggrColStatsCacheSize = size == null ? oe.estimate(this.aggrColStatsCache, sizeEstimators) : size;
+        break;
+      default:
+        break;
+      }
+    }
 
     void cachePartition(Partition part, SharedCache sharedCache) {
       try {
         tableLock.writeLock().lock();
         PartitionWrapper wrapper = makePartitionWrapper(part, sharedCache);
         partitionCache.put(CacheUtils.buildPartitionCacheKey(part.getValues()), wrapper);
+        updateMemberSize(MemberName.PARTITION_CACHE, null);
         isPartitionCacheDirty.set(true);
         // Invalidate cached aggregate stats
         if (!aggrColStatsCache.isEmpty()) {
           aggrColStatsCache.clear();
+          updateMemberSize(MemberName.AGGR_COL_STATS_CACHE, 0);
         }
       } finally {
         tableLock.writeLock().unlock();
@@ -251,22 +282,8 @@ public class SharedCache {
         tableLock.writeLock().lock();
         for (Partition part : parts) {
           PartitionWrapper ptnWrapper = makePartitionWrapper(part, sharedCache);
-          if (maxCacheSizeInBytes > 0) {
-            ObjectEstimator ptnWrapperSizeEstimator =
-                getMemorySizeEstimator(PartitionWrapper.class);
-            long estimatedMemUsage = ptnWrapperSizeEstimator.estimate(ptnWrapper, sizeEstimators);
-            LOG.trace("Memory needed to cache Partition: {} is {} bytes", part, estimatedMemUsage);
-            if (isCacheMemoryFull(estimatedMemUsage)) {
-              LOG.debug(
-                  "Cannot cache Partition: {}. Memory needed is {} bytes, whereas the memory remaining is: {} bytes.",
-                  part, estimatedMemUsage, (0.8 * maxCacheSizeInBytes - currentCacheSizeInBytes));
-              return false;
-            } else {
-              currentCacheSizeInBytes += estimatedMemUsage;
-            }
-            LOG.trace("Current cache size: {} bytes", currentCacheSizeInBytes);
-          }
           partitionCache.put(CacheUtils.buildPartitionCacheKey(part.getValues()), ptnWrapper);
+          updateMemberSize(MemberName.PARTITION_CACHE, null);
           if (!fromPrewarm) {
             isPartitionCacheDirty.set(true);
           }
@@ -274,6 +291,7 @@ public class SharedCache {
         // Invalidate cached aggregate stats
         if (!aggrColStatsCache.isEmpty()) {
           aggrColStatsCache.clear();
+          updateMemberSize(MemberName.AGGR_COL_STATS_CACHE, 0);
         }
         return true;
       } finally {
@@ -384,37 +402,7 @@ public class SharedCache {
       }
     }
 
-    private enum MemberName{
-      TABLE_COL_STATS_CACHE,
-      PARTITION_CACHE,
-      PARTITION_COL_STATS_CACHE,
-      AGGR_COL_STATS_CACHE
-    }
-    private void updateMemberSize(MemberName mn, Integer size){
-      ObjectEstimator oe = null;
-      switch (mn) {
-      case TABLE_COL_STATS_CACHE:
-        oe = getMemorySizeEstimator(tableColStatsCache.getClass());
-        tableColStatsCacheSize = size == null ? oe.estimate(this.tableColStatsCache, sizeEstimators) : size;
-        break;
-      case PARTITION_CACHE:
-        oe = getMemorySizeEstimator(partitionCache.getClass());
-        partitionCacheSize = size == null ? oe.estimate(this.partitionCache, sizeEstimators) : size;
-        break;
-      case PARTITION_COL_STATS_CACHE:
-        oe = getMemorySizeEstimator(partitionColStatsCache.getClass());
-        partitionColStatsCacheSize = size == null ? oe.estimate(this.partitionColStatsCache, sizeEstimators) : size;
-        break;
-      case AGGR_COL_STATS_CACHE:
-        oe = getMemorySizeEstimator(aggrColStatsCache.getClass());
-        aggrColStatsCacheSize = size == null ? oe.estimate(this.aggrColStatsCache, sizeEstimators) : size;
-        break;
-      default:
 
-        break;
-      }
-
-    }
 
     public void alterPartitionAndStats(List<String> partVals, SharedCache sharedCache, long writeId,
                                        Map<String,String> parameters, List<ColumnStatisticsObj> colStatsObjs) {
