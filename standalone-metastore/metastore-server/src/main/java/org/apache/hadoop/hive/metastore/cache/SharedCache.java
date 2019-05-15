@@ -123,6 +123,7 @@ public class SharedCache {
     }
     if(tableCache == null) {
       tableCache = CacheBuilder.newBuilder().maximumWeight(maxSharedCacheSizeInBytes)
+          .recordStats()
           .weigher(new Weigher<String, TableWrapper>() {
             @Override public int weigh(String key, TableWrapper value) {
               return value.getSize();
@@ -258,6 +259,18 @@ public class SharedCache {
       default:
         break;
       }
+      //So that cache can record correct size of the entry
+      refreshTableWrapperInCache(); //TODO: can we do it async or use event listener
+    }
+
+    void refreshTableWrapperInCache(){
+      Table t = this.t;
+      String catName = t.getCatName();
+      String dbName  = t.getDbName();
+      String tblName = t.getTableName();
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      tableCache.invalidate(tblKey);
+      tableCache.put(tblKey, this);
     }
 
     void cachePartition(Partition part, SharedCache sharedCache) {
