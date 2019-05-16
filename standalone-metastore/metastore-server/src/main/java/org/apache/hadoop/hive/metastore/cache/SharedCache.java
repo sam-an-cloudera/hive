@@ -122,7 +122,7 @@ public class SharedCache {
       sizeEstimators = IncrementalObjectSizeEstimator.createEstimators(SharedCache.class);
     }
     if(tableCache == null) {
-      tableCache = CacheBuilder.newBuilder().maximumWeight(maxSharedCacheSizeInBytes)
+      tableCache = CacheBuilder.newBuilder().maximumWeight(Math.abs(maxSharedCacheSizeInBytes))
           .recordStats()
           .weigher(new Weigher<String, TableWrapper>() {
             @Override public int weigh(String key, TableWrapper value) {
@@ -184,11 +184,16 @@ public class SharedCache {
       partitionCacheSize = 0;
       partitionColStatsCacheSize = 0;
       aggrColStatsCacheSize = 0;
-      ObjectEstimator oe = getMemorySizeEstimator(TableWrapper.class);
-      otherSize = oe.estimate(this, sizeEstimators);
+      if( sizeEstimators != null) {
+        ObjectEstimator oe = getMemorySizeEstimator(TableWrapper.class);
+        otherSize = oe.estimate(this, sizeEstimators);
+      }
     }
 
     public int getSize(){
+      if(sizeEstimators == null){
+        return 0;
+      }
       return  otherSize
             + tableColStatsCacheSize
             + partitionCacheSize
@@ -238,6 +243,9 @@ public class SharedCache {
       AGGR_COL_STATS_CACHE
     }
     private void updateMemberSize(MemberName mn, Integer size){
+      if( sizeEstimators == null){
+        return;
+      }
       ObjectEstimator oe = null;
       switch (mn) {
       case TABLE_COL_STATS_CACHE:
