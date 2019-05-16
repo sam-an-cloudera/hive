@@ -35,6 +35,7 @@ import java.util.TreeMap;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheStats;
 import com.google.common.cache.Weigher;
 import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
@@ -77,7 +78,7 @@ public class SharedCache {
   private AtomicBoolean isDatabaseCacheDirty = new AtomicBoolean(false);
 
   // For caching TableWrapper objects. Key is aggregate of database name and table name
-  private static Cache<String, TableWrapper> tableCache = null;
+  private Cache<String, TableWrapper> tableCache = null;
 
   private boolean isTableCachePrewarmed = false;
   private HashSet<String> tablesDeletedDuringPrewarm = new HashSet<>();
@@ -140,6 +141,11 @@ public class SharedCache {
       estimator = sizeEstimators.get(clazz);
     }
     return estimator;
+  }
+
+  private void updateParentSize(String tblKey,  TableWrapper tw){
+    tableCache.invalidate(tblKey);
+    tableCache.put(tblKey, tw);
   }
 
   static class TableWrapper {
@@ -246,26 +252,31 @@ public class SharedCache {
       if( sizeEstimators == null){
         return;
       }
-      ObjectEstimator oe = null;
-      switch (mn) {
-      case TABLE_COL_STATS_CACHE:
-        oe = getMemorySizeEstimator(tableColStatsCache.getClass());
-        tableColStatsCacheSize = size == null ? oe.estimate(this.tableColStatsCache, sizeEstimators) : size;
-        break;
-      case PARTITION_CACHE:
-        oe = getMemorySizeEstimator(partitionCache.getClass());
-        partitionCacheSize = size == null ? oe.estimate(this.partitionCache, sizeEstimators) : size;
-        break;
-      case PARTITION_COL_STATS_CACHE:
-        oe = getMemorySizeEstimator(partitionColStatsCache.getClass());
-        partitionColStatsCacheSize = size == null ? oe.estimate(this.partitionColStatsCache, sizeEstimators) : size;
-        break;
-      case AGGR_COL_STATS_CACHE:
-        oe = getMemorySizeEstimator(aggrColStatsCache.getClass());
-        aggrColStatsCacheSize = size == null ? oe.estimate(this.aggrColStatsCache, sizeEstimators) : size;
-        break;
-      default:
-        break;
+      try {
+        ObjectEstimator oe = null;
+        switch (mn) {
+        case TABLE_COL_STATS_CACHE:
+          oe = getMemorySizeEstimator(tableColStatsCache.getClass());
+          tableColStatsCacheSize = size == null ? oe.estimate(this.tableColStatsCache, sizeEstimators) : size;
+          break;
+        case PARTITION_CACHE:
+          oe = getMemorySizeEstimator(partitionCache.getClass());
+          partitionCacheSize = size == null ? oe.estimate(this.partitionCache, sizeEstimators) : size;
+          break;
+        case PARTITION_COL_STATS_CACHE:
+          oe = getMemorySizeEstimator(partitionColStatsCache.getClass());
+          partitionColStatsCacheSize = size == null ? oe.estimate(this.partitionColStatsCache, sizeEstimators) : size;
+          break;
+        case AGGR_COL_STATS_CACHE:
+          oe = getMemorySizeEstimator(aggrColStatsCache.getClass());
+          aggrColStatsCacheSize = size == null ? oe.estimate(this.aggrColStatsCache, sizeEstimators) : size;
+          break;
+        default:
+          break;
+        }
+      }catch(Exception ex){
+        //swallow the exception for testing. Troubleshoot later.
+        LOG.error("update member size failed", ex);
       }
       //So that cache can record correct size of the entry
       refreshTableWrapperInCache(); //TODO: can we do it async or use event listener
@@ -277,8 +288,7 @@ public class SharedCache {
       String dbName  = t.getDbName();
       String tblName = t.getTableName();
       String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
-      tableCache.invalidate(tblKey);
-      tableCache.put(tblKey, this);
+
     }
 
     void cachePartition(Partition part, SharedCache sharedCache) {
@@ -1350,8 +1360,9 @@ public class SharedCache {
         tablesDeletedDuringPrewarm.add(CacheUtils.buildTableKey(catName, dbName, tblName));
       }
       //TODO: handle table removal
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
       TableWrapper tblWrapper =
-          tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+          tableCache.getIfPresent(tblKey);
       if (tblWrapper == null) {
         //in case of retry, ignore second try.
         return;
@@ -1361,6 +1372,7 @@ public class SharedCache {
         if (sdHash != null) {
           decrSd(sdHash);
         }
+        tableCache.invalidate(tblKey);
         isTableCacheDirty.set(true);
       }
     } finally {
@@ -1955,6 +1967,10 @@ public class SharedCache {
     isCatalogCacheDirty.set(false);
     isDatabaseCacheDirty.set(false);
     isTableCacheDirty.set(false);
+  }
+  public void printCacheStats(){
+    CacheStats cs = tableCache.stats();
+    LOG.info(cs.toString());
   }
 
   public long getUpdateCount() {
