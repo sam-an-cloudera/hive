@@ -126,7 +126,7 @@ public class SharedCache {
       sizeEstimators = IncrementalObjectSizeEstimator.createEstimators(SharedCache.class);
     }
     if(tableCache == null) {
-      tableCache = CacheBuilder.newBuilder().maximumWeight(Math.abs(maxSharedCacheSizeInBytes))
+      tableCache = CacheBuilder.newBuilder().maximumWeight(maxSharedCacheSizeInBytes > 0 ? maxSharedCacheSizeInBytes : 1024 * 1024 )
           .recordStats()
           .weigher(new Weigher<String, TableWrapper>() {
             @Override public int weigh(String key, TableWrapper value) {
@@ -145,6 +145,8 @@ public class SharedCache {
     }
     return estimator;
   }
+   static Map<Class<?>, Integer> memberSizeMap = new HashMap<>();
+
 
    class TableWrapper {
     Table t;
@@ -156,6 +158,7 @@ public class SharedCache {
     int partitionCacheSize;
     int partitionColStatsCacheSize;
     int aggrColStatsCacheSize;
+
     ReentrantReadWriteLock tableLock = new ReentrantReadWriteLock(true);
     // For caching column stats for an unpartitioned table
     // Key is column name and the value is the col stat object
@@ -188,14 +191,6 @@ public class SharedCache {
       partitionCacheSize = 0;
       partitionColStatsCacheSize = 0;
       aggrColStatsCacheSize = 0;
-      if( sizeEstimators != null) {
-        ObjectEstimator oe = getMemorySizeEstimator(TableWrapper.class);
-        try {
-          otherSize = oe.estimate(this, sizeEstimators);
-        }catch(Exception ex){
-          LOG.error("error", ex);
-        }
-      }
     }
 
     public int getSize(){
@@ -250,23 +245,19 @@ public class SharedCache {
         return;
       }
       try {
-        ObjectEstimator oe = null;
         switch (mn) {
+        //TODO: get the individual size of map entries and plug in place of 100 bytes
         case TABLE_COL_STATS_CACHE:
-          oe = getMemorySizeEstimator(tableColStatsCache.getClass());
-          tableColStatsCacheSize = size == null ? oe.estimate(this.tableColStatsCache, sizeEstimators) : size;
+          tableColStatsCacheSize = size == null ? tableColStatsCache.size() * 100 : size;
           break;
         case PARTITION_CACHE:
-          oe = getMemorySizeEstimator(partitionCache.getClass());
-          partitionCacheSize = size == null ? oe.estimate(this.partitionCache, sizeEstimators) : size;
+          partitionCacheSize = size == null ? this.partitionCache.size() * 100 : size;
           break;
         case PARTITION_COL_STATS_CACHE:
-          oe = getMemorySizeEstimator(partitionColStatsCache.getClass());
-          partitionColStatsCacheSize = size == null ? oe.estimate(this.partitionColStatsCache, sizeEstimators) : size;
+          partitionColStatsCacheSize = size == null ? this.partitionColStatsCache.size() * 100  : size;
           break;
         case AGGR_COL_STATS_CACHE:
-          oe = getMemorySizeEstimator(aggrColStatsCache.getClass());
-          aggrColStatsCacheSize = size == null ? oe.estimate(this.aggrColStatsCache, sizeEstimators) : size;
+          aggrColStatsCacheSize = size == null ? this.aggrColStatsCache.size() * 100 : size;
           break;
         default:
           break;

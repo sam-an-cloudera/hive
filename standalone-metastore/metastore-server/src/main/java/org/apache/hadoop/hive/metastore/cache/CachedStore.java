@@ -200,10 +200,6 @@ public class CachedStore implements RawStore, Configurable {
   private void initSharedCache(Configuration conf) {
     long maxSharedCacheSizeInBytes =
         MetastoreConf.getSizeVar(conf, ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY);
-    //Isolate out the problem of negative weight, with this, all failures are assertion failures due to singleton tableCache
-    if( maxSharedCacheSizeInBytes < 0){
-      maxSharedCacheSizeInBytes = 10 * 1024 *1024;
-    }
     sharedCache.initialize(maxSharedCacheSizeInBytes);
     if (maxSharedCacheSizeInBytes > 0) {
       LOG.info("Maximum memory that the cache will use: {} KB",
