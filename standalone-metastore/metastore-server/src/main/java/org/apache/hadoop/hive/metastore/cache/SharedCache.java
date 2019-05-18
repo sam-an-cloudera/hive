@@ -141,6 +141,7 @@ public class SharedCache {
     }
     return estimator;
   }
+
   void refreshTableWrapperInCache(String tblKey, TableWrapper tw){
     tableCache.invalidate(tblKey);
     tableCache.put(tblKey, tw);
@@ -305,6 +306,7 @@ public class SharedCache {
         for (Partition part : parts) {
           PartitionWrapper ptnWrapper = makePartitionWrapper(part, sharedCache);
           partitionCache.put(CacheUtils.buildPartitionCacheKey(part.getValues()), ptnWrapper);
+          SharedCache.estimateSizeForTableWrapperWithConcurrentMaps(this);
           updateMemberSize(MemberName.PARTITION_CACHE, null);
           if (!fromPrewarm) {
             isPartitionCacheDirty.set(true);
@@ -1657,6 +1659,14 @@ public class SharedCache {
     return tableMetas;
   }
 
+  private static void estimateSizeForTableWrapperWithConcurrentMaps(TableWrapper tw){
+    ObjectEstimator oe = getMemorySizeEstimator(TableWrapper.class);
+    try {
+      oe.estimate(tw, sizeEstimators);
+    }catch(Exception ex){
+      LOG.error("existing bug here", ex);
+    }
+  }
   public void addPartitionToCache(String catName, String dbName, String tblName, Partition part) {
     try {
       cacheLock.readLock().lock();
