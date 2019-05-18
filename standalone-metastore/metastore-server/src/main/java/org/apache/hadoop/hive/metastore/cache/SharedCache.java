@@ -141,8 +141,11 @@ public class SharedCache {
     }
     return estimator;
   }
-
-   class TableWrapper {
+  void refreshTableWrapperInCache(String tblKey, TableWrapper tw){
+    tableCache.invalidate(tblKey);
+    tableCache.put(tblKey, tw);
+  }
+   static class TableWrapper {
     Table t;
     String location;
     Map<String, String> parameters;
@@ -275,21 +278,9 @@ public class SharedCache {
         //swallow the exception for testing. Troubleshoot later.
         LOG.error("update member size failed", ex);
       }
-      //So that cache can record correct size of the entry
-      refreshTableWrapperInCache();
     }
 
-    void refreshTableWrapperInCache(){
-      Table t = this.t;
-      String catName = t.getCatName();
-      String dbName  = t.getDbName();
-      String tblName = t.getTableName();
-      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
 
-      tableCache.invalidate(tblKey);
-      tableCache.put(tblKey, this);
-
-    }
 
     void cachePartition(Partition part, SharedCache sharedCache) {
       try {
@@ -1554,12 +1545,15 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.removeTableColStats(colName);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       } else {
         LOG.info("Table " + tblName + " is missing from cache.");
       }
+
     } finally {
       tableCacheRWLock.writeLock().unlock();
       cacheLock.readLock().unlock();
@@ -1570,9 +1564,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.removeAllTableColStats();
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       } else {
         LOG.info("Table " + tblName + " is missing from cache.");
       }
@@ -1587,10 +1583,12 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tableName);
       TableWrapper tblWrapper =
-          tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tableName));
+          tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.updateTableColStats(colStatsForTable);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       } else {
         LOG.info("Table " + tableName + " is missing from cache.");
       }
@@ -1605,10 +1603,12 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tableName);
       TableWrapper tblWrapper =
-          tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tableName));
+          tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.refreshTableColStats(colStatsForTable);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       } else {
         LOG.info("Table " + tableName + " is missing from cache.");
       }
@@ -1665,9 +1665,7 @@ public class SharedCache {
       TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.cachePartition(part, this);
-        //how about update tableCache here
-        tableCache.invalidate(tblKey);
-        tableCache.put(tblKey, tblWrapper);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1680,9 +1678,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.cachePartitions(parts, this, false);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1696,9 +1696,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.readLock().lock();
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
         part = tblWrapper.getPartition(partVals, this);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.readLock().unlock();
@@ -1713,9 +1715,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         existsPart = tblWrapper.containsPartition(partVals);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.readLock().unlock();
@@ -1730,9 +1734,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         part = tblWrapper.removePartition(partVals, this);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }else{
         LOG.warn("This is abnormal");
       }
@@ -1748,9 +1754,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.removePartitions(partVals, this);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1764,9 +1772,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         parts = tblWrapper.listPartitions(max, this);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.readLock().unlock();
@@ -1780,9 +1790,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.alterPartition(partVals, newPart, this);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1796,9 +1808,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.alterPartitionAndStats(partVals, this, writeId, parameters, colStatsObjs);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1811,9 +1825,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.alterPartitions(partValsList, newParts, this);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1826,9 +1842,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.refreshPartitions(partitions, this);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1841,9 +1859,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.removePartitionColStats(partVals, colName);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1855,9 +1875,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.removeAllPartitionColStats();
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1870,10 +1892,12 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tableName);
       TableWrapper tblWrapper =
-          tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tableName));
+          tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.updatePartitionColStats(partVals, colStatsObjs);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1887,9 +1911,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         colStatObj = tblWrapper.getPartitionColStats(partVal, colName, writeIdList);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.readLock().unlock();
@@ -1905,9 +1931,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         colStatObjs = tblWrapper.getPartColStatsList(partNames, colNames, writeIdList, txnStatSupported);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } catch (MetaException e) {
       LOG.warn("Failed to get partition column statistics");
@@ -1923,9 +1951,11 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.refreshPartitionColStats(partitionColStats);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
@@ -1938,8 +1968,10 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
+        refreshTableWrapperInCache(tblKey, tblWrapper);
         return tblWrapper.getAggrPartitionColStats(colNames, statsType);
       }
     } finally {
@@ -1949,7 +1981,7 @@ public class SharedCache {
     return null;
   }
 
-  public void addAggregateStatsToCache(String catName, String dbName, String tblName,
+  /*public void addAggregateStatsToCache(String catName, String dbName, String tblName,
       AggrStats aggrStatsAllPartitions, AggrStats aggrStatsAllButDefaultPartition) {
     try {
       cacheLock.readLock().lock();
@@ -1963,7 +1995,7 @@ public class SharedCache {
       tableCacheRWLock.writeLock().unlock();
       cacheLock.readLock().unlock();
     }
-  }
+  }*/
 
   public void refreshAggregateStatsInCache(String catName, String dbName, String tblName,
       AggrStats aggrStatsAllPartitions, AggrStats aggrStatsAllButDefaultPartition,
@@ -1971,10 +2003,12 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.refreshAggrPartitionColStats(aggrStatsAllPartitions,
             aggrStatsAllButDefaultPartition, this, partNameToWriteId);
+        refreshTableWrapperInCache(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
