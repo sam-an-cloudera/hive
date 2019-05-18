@@ -85,8 +85,6 @@ public class SharedCache {
   private static long maxCacheSizeInBytes = -1;
   private static long currentCacheSizeInBytes = 0;
   private static HashMap<Class<?>, ObjectEstimator> sizeEstimators = null;
-  //TODO: use background thread to update the TableWrapper size in tableCache
-  private Set<String> tblsToUpdate = new ConcurrentHashSet<>();
 
   enum StatsType {
     ALL(0), ALLBUTDEFAULT(1), PARTIAL(2);
@@ -109,8 +107,6 @@ public class SharedCache {
   }
 
   static {
-
-
     try {
       md = MessageDigest.getInstance("MD5");
     } catch (NoSuchAlgorithmException e) {
@@ -145,8 +141,6 @@ public class SharedCache {
     }
     return estimator;
   }
-   static Map<Class<?>, Integer> memberSizeMap = new HashMap<>();
-
 
    class TableWrapper {
     Table t;
@@ -191,6 +185,17 @@ public class SharedCache {
       partitionCacheSize = 0;
       partitionColStatsCacheSize = 0;
       aggrColStatsCacheSize = 0;
+      otherSize = 0;
+      /*if( sizeEstimators != null) {
+        ObjectEstimator oe = getMemorySizeEstimator(TableWrapper.class);
+        try {
+          otherSize = oe.estimate(this, sizeEstimators);
+        }catch(Exception ex){
+          LOG.error("error", ex);
+        }
+      }*/
+
+
     }
 
     public int getSize(){
@@ -245,22 +250,26 @@ public class SharedCache {
         return;
       }
       try {
+        ObjectEstimator oe = null;
         switch (mn) {
-        //TODO: get the individual size of map entries and plug in place of 100 bytes
-        case TABLE_COL_STATS_CACHE:
-          tableColStatsCacheSize = size == null ? tableColStatsCache.size() * 100 : size;
-          break;
-        case PARTITION_CACHE:
-          partitionCacheSize = size == null ? this.partitionCache.size() * 100 : size;
-          break;
-        case PARTITION_COL_STATS_CACHE:
-          partitionColStatsCacheSize = size == null ? this.partitionColStatsCache.size() * 100  : size;
-          break;
-        case AGGR_COL_STATS_CACHE:
-          aggrColStatsCacheSize = size == null ? this.aggrColStatsCache.size() * 100 : size;
-          break;
-        default:
-          break;
+          case TABLE_COL_STATS_CACHE:
+            oe = getMemorySizeEstimator(tableColStatsCache.getClass());
+            tableColStatsCacheSize = size == null ? oe.estimate(this.tableColStatsCache, sizeEstimators) : size;
+            break;
+          case PARTITION_CACHE:
+            oe = getMemorySizeEstimator(partitionCache.getClass());
+            partitionCacheSize = size == null ? oe.estimate(this.partitionCache, sizeEstimators) : size;
+            break;
+          case PARTITION_COL_STATS_CACHE:
+            oe = getMemorySizeEstimator(partitionColStatsCache.getClass());
+            partitionColStatsCacheSize = size == null ? oe.estimate(this.partitionColStatsCache, sizeEstimators) : size;
+            break;
+          case AGGR_COL_STATS_CACHE:
+            oe = getMemorySizeEstimator(aggrColStatsCache.getClass());
+            aggrColStatsCacheSize = size == null ? oe.estimate(this.aggrColStatsCache, sizeEstimators) : size;
+            break;
+          default:
+            break;
         }
       }catch(Exception ex){
         //swallow the exception for testing. Troubleshoot later.
@@ -1652,9 +1661,13 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       tableCacheRWLock.writeLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+      TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
         tblWrapper.cachePartition(part, this);
+        //how about update tableCache here
+        tableCache.invalidate(tblKey);
+        tableCache.put(tblKey, tblWrapper);
       }
     } finally {
       tableCacheRWLock.writeLock().unlock();
