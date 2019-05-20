@@ -159,7 +159,7 @@ public class TestCachedStore {
   public void testPrewarm() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
-    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "10Kb");
+    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
     MetaStoreTestUtils.setConfForStandloneMode(conf);
     CachedStore cachedStore = new CachedStore();
     CachedStore.clearSharedCache();
