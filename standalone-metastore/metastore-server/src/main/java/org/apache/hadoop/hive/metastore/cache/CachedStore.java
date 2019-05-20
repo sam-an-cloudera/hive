@@ -200,7 +200,8 @@ public class CachedStore implements RawStore, Configurable {
   private void initSharedCache(Configuration conf) {
     long maxSharedCacheSizeInBytes =
         MetastoreConf.getSizeVar(conf, ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY);
-    sharedCache.initialize(maxSharedCacheSizeInBytes);
+    int refreshInterval = 1000; //ms
+    sharedCache.initialize(maxSharedCacheSizeInBytes, refreshInterval);
     if (maxSharedCacheSizeInBytes > 0) {
       LOG.info("Maximum memory that the cache will use: {} KB",
           maxSharedCacheSizeInBytes / (1024));
