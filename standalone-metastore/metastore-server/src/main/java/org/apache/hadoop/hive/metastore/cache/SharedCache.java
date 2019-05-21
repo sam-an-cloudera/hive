@@ -88,6 +88,7 @@ public class SharedCache {
   private static HashMap<Class<?>, ObjectEstimator> sizeEstimators = null;
   private Set<String> tableToUpdateSize = new ConcurrentHashSet<>();
   private ScheduledExecutorService executor = null;
+  private Map<String, Integer> tableSizeMap = null;
 
   enum StatsType {
     ALL(0), ALLBUTDEFAULT(1), PARTIAL(2);
@@ -132,6 +133,7 @@ public class SharedCache {
       for(String s: setToUpdate){
         refreshTableWrapperInCache(s);
       }
+      setToUpdate.clear();
     }
 
     void refreshTableWrapperInCache(String tblKey){
@@ -148,7 +150,10 @@ public class SharedCache {
     }
   }
 
-  public void initialize(long maxSharedCacheSizeInBytes, int refreshInterval) {
+  public void setTableSizeMap(Map<String, Integer> map){
+    tableSizeMap = map;
+  }
+  public void initialize(long maxSharedCacheSizeInBytes, int refreshInterval, Map<String, Integer> tsm) {
     maxCacheSizeInBytes = maxSharedCacheSizeInBytes;
     // Create estimators
     if ((maxCacheSizeInBytes > 0) && (sizeEstimators == null)) {
@@ -163,6 +168,7 @@ public class SharedCache {
             }
           }).build();
 
+      tableSizeMap = tsm;
       executor = Executors.newScheduledThreadPool(1, new ThreadFactory() {
         @Override public Thread newThread(Runnable r) {
           Thread t = Executors.defaultThreadFactory().newThread(r);
@@ -246,13 +252,32 @@ public class SharedCache {
       partitionCacheSize = 0;
       partitionColStatsCacheSize = 0;
       aggrColStatsCacheSize = 0;
-      otherSize = 0;
-      if( sizeEstimators != null) {
+      //TODO: fix ObjectSizeEstimator bug and estimate otherSize later.
+      otherSize = 3000;
+
+      /*if( sizeEstimators != null) {
         otherSize = getObjectSize(TableWrapper.class, this);
-      }
+      }*/
     }
 
+
+
     public int getSize(){
+      //facilitate testing only. In production we won't use tableSizeMap at all.
+      if (tableSizeMap != null){
+        Table t = this.t;
+        String catName = t.getCatName();
+        String dbName  = t.getDbName();
+        String tblName = t.getTableName();
+        String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
+
+        if (tableSizeMap.containsKey(tblKey)){
+          return tableSizeMap.get(tblKey);
+        }else{
+          return 0;
+        }
+      }
+
       if(sizeEstimators == null){
         return 0;
       }
@@ -303,6 +328,7 @@ public class SharedCache {
       if( sizeEstimators == null){
         return;
       }
+
       switch (mn) {
         case TABLE_COL_STATS_CACHE:
           if (mode == SizeMode.Delta) {

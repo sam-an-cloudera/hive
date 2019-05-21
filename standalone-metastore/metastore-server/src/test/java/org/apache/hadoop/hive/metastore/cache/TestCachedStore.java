@@ -673,6 +673,39 @@ public class TestCachedStore {
   }
 
   @Test
+  public void testTableEviction() throws Exception {
+    Configuration conf = MetastoreConf.newMetastoreConf();
+    MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
+    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "9kb");
+    MetaStoreTestUtils.setConfForStandloneMode(conf);
+    CachedStore cachedStore = new CachedStore();
+    CachedStore.clearSharedCache();
+    cachedStore.setConfForTest(conf);
+
+    //set up table size map
+    Map<String, Integer> tableSizeMap = new HashMap<>();
+    String db1Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    tableSizeMap.put(db1Utbl1_tblKey, 4000);
+    String db2Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
+    tableSizeMap.put(db2Utbl1_tblKey, 4000);
+    cachedStore.setTableSizeMapForTest(tableSizeMap);
+
+    ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
+    // Prewarm CachedStore
+    CachedStore.setCachePrewarmedState(false);
+    CachedStore.prewarm(objectStore);
+
+
+    List<String> db1Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
+    Assert.assertEquals(0, db1Tables.size());
+    List<String> db2Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
+    Assert.assertEquals(2, db2Tables.size());
+
+
+    cachedStore.shutdown();
+  }
+
+  @Test
   public void testDropTable() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);

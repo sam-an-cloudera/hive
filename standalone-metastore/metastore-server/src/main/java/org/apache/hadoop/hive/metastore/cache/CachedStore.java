@@ -131,7 +131,8 @@ public class CachedStore implements RawStore, Configurable {
     setConfInternal(conf);
     initBlackListWhiteList(conf);
     initSharedCache(conf);
-    startCacheUpdateService(conf, false, true);
+    //startCacheUpdateService(conf, false, true);
+    startCacheUpdateService(conf, true, false);
   }
 
   /**
@@ -143,6 +144,9 @@ public class CachedStore implements RawStore, Configurable {
     setConfInternal(conf);
     initBlackListWhiteList(conf);
     initSharedCache(conf);
+  }
+  void setTableSizeMapForTest(Map<String, Integer> map){
+    sharedCache.setTableSizeMap(map);
   }
 
   synchronized private static void triggerUpdateUsingEvent(RawStore rawStore) {
@@ -200,8 +204,12 @@ public class CachedStore implements RawStore, Configurable {
   private void initSharedCache(Configuration conf) {
     long maxSharedCacheSizeInBytes =
         MetastoreConf.getSizeVar(conf, ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY);
+    if( maxSharedCacheSizeInBytes < 0){
+      maxSharedCacheSizeInBytes = 10 * 1024 * 1024;
+    }
     int refreshInterval = 1000; //ms
-    sharedCache.initialize(maxSharedCacheSizeInBytes, refreshInterval);
+
+    sharedCache.initialize(maxSharedCacheSizeInBytes, refreshInterval, null);
     if (maxSharedCacheSizeInBytes > 0) {
       LOG.info("Maximum memory that the cache will use: {} KB",
           maxSharedCacheSizeInBytes / (1024));
@@ -1210,7 +1218,9 @@ public class CachedStore implements RawStore, Configurable {
       // let's move this table to the top of tblNamesBeingPrewarmed stack,
       // so that it gets loaded to the cache faster and is available for subsequent requests
       tblsPendingPrewarm.prioritizeTableForPrewarm(tblName);
-      return rawStore.getTable(catName, dbName, tblName, validWriteIds);
+      Table t = rawStore.getTable(catName, dbName, tblName, validWriteIds);
+      sharedCache.addTableToCache(catName, dbName, tblName, t);
+      return t;
     }
     if (validWriteIds != null) {
       tbl.setParameters(
