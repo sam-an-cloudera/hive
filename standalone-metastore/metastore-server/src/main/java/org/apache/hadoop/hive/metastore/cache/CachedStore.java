@@ -120,7 +120,7 @@ public class CachedStore implements RawStore, Configurable {
   private Configuration conf;
   private static boolean areTxnStatsSupported;
   private PartitionExpressionProxy expressionProxy = null;
-  private static SharedCache sharedCache = new SharedCache();
+  private static SharedCache sharedCache = null;
   private static  boolean canUseEvents = false;
   private static long lastEventId;
 
@@ -140,13 +140,16 @@ public class CachedStore implements RawStore, Configurable {
    * @param conf
    */
   void setConfForTest(Configuration conf) {
-    setConfInternal(conf);
-    initBlackListWhiteList(conf);
+    setConfForTestExceptSharedCache(conf);
     initSharedCache(conf);
   }
 
-  void setTableSizeMapForTest(Map<String, Integer> map){
-    sharedCache.setTableSizeMap(map);
+  void setConfForTestExceptSharedCache(Configuration conf){
+    setConfInternal(conf);
+    initBlackListWhiteList(conf);
+  }
+  void setSharedCache(SharedCache sc){
+    sharedCache = sc;
   }
 
   synchronized private static void triggerUpdateUsingEvent(RawStore rawStore) {
@@ -202,17 +205,10 @@ public class CachedStore implements RawStore, Configurable {
   }
 
   private void initSharedCache(Configuration conf) {
-    long maxSharedCacheSizeInBytes =
-        MetastoreConf.getSizeVar(conf, ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY);
-
-    int refreshInterval = 10000; //TODO: use a config?
-
-    sharedCache.initialize(maxSharedCacheSizeInBytes, refreshInterval, null);
-
-    if (maxSharedCacheSizeInBytes > 0) {
-      LOG.info("Maximum memory that the cache will use: {} KB",
-          maxSharedCacheSizeInBytes / (1024));
-    }
+    SharedCache.Builder builder = new SharedCache.Builder();
+    sharedCache = builder
+                  .configuration(conf)
+                  .build();
   }
 
   @VisibleForTesting
@@ -1218,7 +1214,9 @@ public class CachedStore implements RawStore, Configurable {
       // so that it gets loaded to the cache faster and is available for subsequent requests
       tblsPendingPrewarm.prioritizeTableForPrewarm(tblName);
       Table t = rawStore.getTable(catName, dbName, tblName, validWriteIds);
-      sharedCache.addTableToCache(catName, dbName, tblName, t);
+      if (t != null) {
+        sharedCache.addTableToCache(catName, dbName, tblName, t);
+      }
       return t;
     }
     if (validWriteIds != null) {

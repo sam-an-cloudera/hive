@@ -31,6 +31,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheStats;
 import com.google.common.cache.Weigher;
 import org.apache.commons.collections.set.SynchronizedSet;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
 import org.apache.hadoop.hive.metastore.*;
@@ -46,11 +47,13 @@ import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.api.TableMeta;
+import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
 import org.apache.hadoop.hive.metastore.txn.TxnUtils;
 import org.apache.hadoop.hive.metastore.utils.MetaStoreServerUtils;
 import org.apache.hadoop.hive.metastore.utils.StringUtils;
 import org.apache.hadoop.hive.ql.util.IncrementalObjectSizeEstimator;
 import org.apache.hadoop.hive.ql.util.IncrementalObjectSizeEstimator.ObjectEstimator;
+import org.apache.hadoop.yarn.webapp.hamlet2.Hamlet;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -150,36 +153,81 @@ public class SharedCache {
     }
   }
 
-  public void setTableSizeMap(Map<String, Integer> map){
-    tableSizeMap = map;
+  public static class Builder{
+    private Map<String, Integer> tableSizeMap = null;
+    private int concurrencyLevel = -1;
+    private long maxBytes;
+    private int refreshInterval = 10000;
+    private Configuration conf;
+
+    Builder tableSizeMap(Map<String, Integer> mp){
+      this.tableSizeMap = mp;
+      return this;
+    }
+
+    Builder configuration(Configuration c){
+      this.conf = c;
+      return this;
+    }
+    Builder concurrencyLevel(int cl){
+      this.concurrencyLevel = cl;
+      return this;
+    }
+
+    Builder maxSharedCacheSizeInBytes(long b){
+      maxBytes = b;
+      return this;
+    }
+
+    Builder refreshInterval(int numMillis){
+      this.refreshInterval = numMillis;
+      return this;
+    }
+
+    public SharedCache build(){
+      SharedCache sc =  new SharedCache();
+      sc.initialize(conf, refreshInterval, tableSizeMap, concurrencyLevel);
+      return sc;
+    }
   }
 
-  public void initialize(long maxSharedCacheSizeInBytes, int refreshInterval, Map<String, Integer> tsm) {
+  public void initialize(Configuration conf, int refreshInterval, Map<String, Integer> tsm, int concurrencyLevel) {
+    long maxSharedCacheSizeInBytes =
+        MetastoreConf.getSizeVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY);
     maxCacheSizeInBytes = maxSharedCacheSizeInBytes;
+
     // Create estimators
     if ((maxCacheSizeInBytes > 0) && (sizeEstimators == null)) {
       sizeEstimators = IncrementalObjectSizeEstimator.createEstimators(SharedCache.class);
     }
+
     if(tableCache == null) {
-      tableCache = CacheBuilder.newBuilder().concurrencyLevel(1).maximumWeight(maxSharedCacheSizeInBytes > 0 ? maxSharedCacheSizeInBytes : 1024 * 1024 )
-          .recordStats()
+      CacheBuilder<String, TableWrapper> b = CacheBuilder.newBuilder()
+          .maximumWeight(maxSharedCacheSizeInBytes > 0 ? maxSharedCacheSizeInBytes : 1024 * 1024)
           .weigher(new Weigher<String, TableWrapper>() {
             @Override public int weigh(String key, TableWrapper value) {
               return value.getSize();
             }
-          }).build();
+          });
 
-      tableSizeMap = tsm;
-      executor = Executors.newScheduledThreadPool(1, new ThreadFactory() {
-        @Override public Thread newThread(Runnable r) {
-          Thread t = Executors.defaultThreadFactory().newThread(r);
-          t.setName("SharedCache table size updater: Thread-" + t.getId());
-          t.setDaemon(true);
-          return t;
-        }
-      });
-      executor.scheduleAtFixedRate(new TableWrapperSizeUpdater(tableToUpdateSize, tableCacheRWLock, tableCache), 0, refreshInterval, TimeUnit.MILLISECONDS);
+      if (concurrencyLevel > 0){
+        b.concurrencyLevel(concurrencyLevel);
       }
+
+      tableCache = b.recordStats().build();
+    }
+
+    tableSizeMap = tsm;
+    executor = Executors.newScheduledThreadPool(1, new ThreadFactory() {
+      @Override public Thread newThread(Runnable r) {
+        Thread t = Executors.defaultThreadFactory().newThread(r);
+        t.setName("SharedCache table size updater: Thread-" + t.getId());
+        t.setDaemon(true);
+        return t;
+      }
+    });
+    executor.scheduleAtFixedRate(new TableWrapperSizeUpdater(tableToUpdateSize, tableCacheRWLock, tableCache), 0, refreshInterval, TimeUnit.MILLISECONDS);
+
   }
 
   private static ObjectEstimator getMemorySizeEstimator(Class<?> clazz) {

@@ -680,8 +680,8 @@ public class TestCachedStore {
     MetaStoreTestUtils.setConfForStandloneMode(conf);
     CachedStore cachedStore = new CachedStore();
     CachedStore.clearSharedCache();
-    cachedStore.setConfForTest(conf);
 
+    cachedStore.setConfForTestExceptSharedCache(conf);
     //set up table size map
     Map<String, Integer> tableSizeMap = new HashMap<>();
     String db1Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
@@ -692,7 +692,13 @@ public class TestCachedStore {
     tableSizeMap.put(db1Ptbl1_tblKey, 4000);
     tableSizeMap.put(db2Utbl1_tblKey, 4000);
     tableSizeMap.put(db2Ptbl1_tblKey, 4000);
-    cachedStore.setTableSizeMapForTest(tableSizeMap);
+
+    SharedCache sc = new SharedCache.Builder()
+        .concurrencyLevel(1)
+        .configuration(conf)
+        .tableSizeMap(tableSizeMap).build();
+    cachedStore.setSharedCache(sc);
+
 
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
