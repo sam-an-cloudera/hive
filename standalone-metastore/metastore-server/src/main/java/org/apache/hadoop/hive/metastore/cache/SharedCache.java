@@ -153,6 +153,7 @@ public class SharedCache {
   public void setTableSizeMap(Map<String, Integer> map){
     tableSizeMap = map;
   }
+
   public void initialize(long maxSharedCacheSizeInBytes, int refreshInterval, Map<String, Integer> tsm) {
     maxCacheSizeInBytes = maxSharedCacheSizeInBytes;
     // Create estimators
@@ -160,7 +161,7 @@ public class SharedCache {
       sizeEstimators = IncrementalObjectSizeEstimator.createEstimators(SharedCache.class);
     }
     if(tableCache == null) {
-      tableCache = CacheBuilder.newBuilder().maximumWeight(maxSharedCacheSizeInBytes > 0 ? maxSharedCacheSizeInBytes : 1024 * 1024 )
+      tableCache = CacheBuilder.newBuilder().concurrencyLevel(1).maximumWeight(maxSharedCacheSizeInBytes > 0 ? maxSharedCacheSizeInBytes : 1024 * 1024 )
           .recordStats()
           .weigher(new Weigher<String, TableWrapper>() {
             @Override public int weigh(String key, TableWrapper value) {
@@ -209,7 +210,7 @@ public class SharedCache {
     Snapshot
   }
 
-   class TableWrapper {
+  class TableWrapper {
     Table t;
     String location;
     Map<String, String> parameters;
