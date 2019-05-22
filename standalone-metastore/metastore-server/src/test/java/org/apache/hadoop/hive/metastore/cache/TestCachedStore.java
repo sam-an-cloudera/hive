@@ -685,9 +685,9 @@ public class TestCachedStore {
     //set up table size map
     Map<String, Integer> tableSizeMap = new HashMap<>();
     String db1Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
-    tableSizeMap.put(db1Utbl1_tblKey, 4000);
+    tableSizeMap.put(db1Utbl1_tblKey, 400);
     String db2Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
-    tableSizeMap.put(db2Utbl1_tblKey, 4000);
+    tableSizeMap.put(db2Utbl1_tblKey, 400);
     cachedStore.setTableSizeMapForTest(tableSizeMap);
 
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
