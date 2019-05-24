@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hive.metastore.cache;
 
+import java.lang.reflect.Field;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -30,7 +31,6 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheStats;
 import com.google.common.cache.Weigher;
-import org.apache.commons.collections.set.SynchronizedSet;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
@@ -53,7 +53,6 @@ import org.apache.hadoop.hive.metastore.utils.MetaStoreServerUtils;
 import org.apache.hadoop.hive.metastore.utils.StringUtils;
 import org.apache.hadoop.hive.ql.util.IncrementalObjectSizeEstimator;
 import org.apache.hadoop.hive.ql.util.IncrementalObjectSizeEstimator.ObjectEstimator;
-import org.apache.hadoop.yarn.webapp.hamlet2.Hamlet;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,6 +91,8 @@ public class SharedCache {
   private Set<String> tableToUpdateSize = new ConcurrentHashSet<>();
   private ScheduledExecutorService executor = null;
   private Map<String, Integer> tableSizeMap = null;
+  private Map<Partition, Integer> partitionWrapperSizeMap = null;
+  private Map<ColumnStatisticsObj, Integer> columnStatsObjSizeMap = null;
 
   enum StatsType {
     ALL(0), ALLBUTDEFAULT(1), PARTIAL(2);
@@ -159,6 +160,8 @@ public class SharedCache {
     private long maxBytes;
     private int refreshInterval = 10000;
     private Configuration conf;
+    private Map<Partition, Integer> partSizeMap;
+    private Map<ColumnStatisticsObj, Integer> columnStatisticsObjSizeMap;
 
     Builder tableSizeMap(Map<String, Integer> mp){
       this.tableSizeMap = mp;
@@ -184,8 +187,21 @@ public class SharedCache {
       return this;
     }
 
+    Builder partitionWrapperSizeMap(Map<Partition, Integer> map){
+      this.partSizeMap = map;
+      return this;
+    }
+
+
+    Builder columnStatsObjSizeMap(Map<ColumnStatisticsObj, Integer> map){
+      this.columnStatisticsObjSizeMap = map;
+      return this;
+    }
+
     public SharedCache build(){
       SharedCache sc =  new SharedCache();
+      sc.partitionWrapperSizeMap = this.partSizeMap;
+      sc.columnStatsObjSizeMap = this.columnStatisticsObjSizeMap;
       sc.initialize(conf, refreshInterval, tableSizeMap, concurrencyLevel);
       return sc;
     }
@@ -297,21 +313,14 @@ public class SharedCache {
       this.sdHash = sdHash;
       this.location = location;
       this.parameters = parameters;
-      tableColStatsCacheSize = 0;
-      partitionCacheSize = 0;
-      partitionColStatsCacheSize = 0;
-      aggrColStatsCacheSize = 0;
-      //TODO: fix ObjectSizeEstimator bug and estimate otherSize later.
-      otherSize = 3000;
-
-      /*if( sizeEstimators != null) {
-        otherSize = getObjectSize(TableWrapper.class, this);
-      }*/
+      this.tableColStatsCacheSize = 0;
+      this.partitionCacheSize = 0;
+      this.partitionColStatsCacheSize = 0;
+      this.aggrColStatsCacheSize = 0;
+      this.otherSize = getTableWrapperSizeWithoutMaps();
     }
 
-
-
-    public int getSize(){
+    private int getTableWrapperSizeWithoutMaps(){
       //facilitate testing only. In production we won't use tableSizeMap at all.
       if (tableSizeMap != null){
         Table t = this.t;
@@ -327,6 +336,32 @@ public class SharedCache {
         }
       }
 
+      Class<?> clazz = TableWrapper.class;
+      Field[] fields = clazz.getDeclaredFields();
+      int size = 0;
+      for (Field field : fields){
+         if ( field.getType().equals(ConcurrentHashMap.class)){
+           continue;
+         }
+         if ( field.getType().equals(SharedCache.class)){
+           continue;
+         }
+         try {
+           field.setAccessible(true);
+           Object val = field.get(this);
+           ObjectEstimator oe = getMemorySizeEstimator(field.getType());
+           if (oe != null) {
+             size += oe.estimate(val, sizeEstimators);
+           }
+         }catch(Exception ex){
+           LOG.error("Not able to estimate size.", ex);
+         }
+      }
+
+      return size;
+    }
+
+    public int getSize(){
       if(sizeEstimators == null){
         return 0;
       }
@@ -423,9 +458,15 @@ public class SharedCache {
         tableLock.writeLock().lock();
         PartitionWrapper wrapper = makePartitionWrapper(part, sharedCache);
         partitionCache.put(CacheUtils.buildPartitionCacheKey(part.getValues()), wrapper);
-        int size = getObjectSize(PartitionWrapper.class, wrapper);
+        int size = 0;
+        if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(wrapper)){
+          size = partitionWrapperSizeMap.get(wrapper);
+        }else {
+          size = getObjectSize(PartitionWrapper.class, wrapper);
+        }
         updateMemberSize(MemberName.PARTITION_CACHE, size, SizeMode.Delta);
         isPartitionCacheDirty.set(true);
+
         // Invalidate cached aggregate stats
         if (!aggrColStatsCache.isEmpty()) {
           aggrColStatsCache.clear();
@@ -440,9 +481,14 @@ public class SharedCache {
       try {
         tableLock.writeLock().lock();
         for (Partition part : parts) {
-          PartitionWrapper ptnWrapper = makePartitionWrapper(part, sharedCache);
-          partitionCache.put(CacheUtils.buildPartitionCacheKey(part.getValues()), ptnWrapper);
-          int size = getObjectSize(PartitionWrapper.class, ptnWrapper);
+          PartitionWrapper wrapper = makePartitionWrapper(part, sharedCache);
+          partitionCache.put(CacheUtils.buildPartitionCacheKey(part.getValues()), wrapper);
+          int size = 0;
+          if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(wrapper)){
+            size = partitionWrapperSizeMap.get(wrapper);
+          }else {
+            size = getObjectSize(PartitionWrapper.class, wrapper);
+          }
           updateMemberSize(MemberName.PARTITION_CACHE, size, SizeMode.Delta);
           if (!fromPrewarm) {
             isPartitionCacheDirty.set(true);
@@ -513,8 +559,13 @@ public class SharedCache {
           return null;
         }
         isPartitionCacheDirty.set(true);
-        int partSize = getObjectSize(PartitionWrapper.class, wrapper);
-        updateMemberSize(MemberName.PARTITION_CACHE, -1 * partSize, SizeMode.Delta);
+        int size = 0;
+        if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(wrapper)){
+          size = partitionWrapperSizeMap.get(wrapper);
+        }else {
+          size = getObjectSize(PartitionWrapper.class, wrapper);
+        }
+        updateMemberSize(MemberName.PARTITION_CACHE, -1 * size, SizeMode.Delta);
         part = CacheUtils.assemble(wrapper, sharedCache);
         if (wrapper.getSdHash() != null) {
           sharedCache.decrSd(wrapper.getSdHash());
@@ -605,7 +656,7 @@ public class SharedCache {
       Map<String, PartitionWrapper> newPartitionCache = new HashMap<String, PartitionWrapper>();
       try {
         tableLock.writeLock().lock();
-        int partSize = 0;
+        int size = 0;
         for (Partition part : partitions) {
           if (isPartitionCacheDirty.compareAndSet(true, false)) {
             LOG.debug("Skipping partition cache update for table: " + getTable().getTableName()
@@ -621,10 +672,14 @@ public class SharedCache {
           }
           wrapper = makePartitionWrapper(part, sharedCache);
           newPartitionCache.put(key, wrapper);
-          partSize += getObjectSize(PartitionWrapper.class, wrapper);
+          if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(wrapper)){
+            size += partitionWrapperSizeMap.get(wrapper);
+          }else {
+            size += getObjectSize(PartitionWrapper.class, wrapper);
+          }
         }
         partitionCache = newPartitionCache;
-        updateMemberSize(MemberName.PARTITION_CACHE, partSize, SizeMode.Snapshot);
+        updateMemberSize(MemberName.PARTITION_CACHE, size, SizeMode.Snapshot);
       } finally {
         tableLock.writeLock().unlock();
       }
@@ -645,7 +700,11 @@ public class SharedCache {
             // No stats exist for this key; add a new object to the cache
             // TODO: get rid of deepCopy after making sure callers don't use references
             tableColStatsCache.put(key, colStatObj.deepCopy());
-            statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
+            if (columnStatsObjSizeMap != null && columnStatsObjSizeMap.containsKey(colStatObj)){
+              statsSize += columnStatsObjSizeMap.get(colStatObj);
+            }else {
+              statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
+            }
           }
         }
         updateMemberSize(MemberName.TABLE_COL_STATS_CACHE, statsSize, SizeMode.Delta);
@@ -671,7 +730,11 @@ public class SharedCache {
           String key = colStatObj.getColName();
           // TODO: get rid of deepCopy after making sure callers don't use references
           newTableColStatsCache.put(key, colStatObj.deepCopy());
-          statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
+          if (columnStatsObjSizeMap != null && columnStatsObjSizeMap.containsKey(colStatObj)){
+            statsSize += columnStatsObjSizeMap.get(colStatObj);
+          }else {
+            statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
+          }
         }
         tableColStatsCache = newTableColStatsCache;
         updateMemberSize(MemberName.TABLE_COL_STATS_CACHE, statsSize, SizeMode.Snapshot);
@@ -819,12 +882,17 @@ public class SharedCache {
           ColumnStatisticsObj oldStatsObj = partitionColStatsCache.get(key);
           if (oldStatsObj != null) {
             // Update existing stat object's field
+            //TODO: compute the difference in size, and add that only to statsSize
             StatObjectConverter.setFieldsIntoOldStats(oldStatsObj, colStatObj);
           } else {
             // No stats exist for this key; add a new object to the cache
             // TODO: get rid of deepCopy after making sure callers don't use references
             partitionColStatsCache.put(key, colStatObj.deepCopy());
-            statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
+            if (columnStatsObjSizeMap != null && columnStatsObjSizeMap.containsKey(colStatObj)){
+              statsSize += columnStatsObjSizeMap.get(colStatObj);
+            }else {
+              statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
+            }
           }
         }
         updateMemberSize(MemberName.PARTITION_COL_STATS_CACHE, statsSize, SizeMode.Delta);
@@ -901,7 +969,11 @@ public class SharedCache {
               String key =
                   CacheUtils.buildPartitonColStatsCacheKey(partVal, colStatObj.getColName());
               newPartitionColStatsCache.put(key, colStatObj.deepCopy());
-              statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
+              if (columnStatsObjSizeMap != null && columnStatsObjSizeMap.containsKey(colStatObj)){
+                statsSize += columnStatsObjSizeMap.get(colStatObj);
+              }else {
+                statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
+              }
             }
           } catch (MetaException e) {
             LOG.debug("Unable to cache partition column stats for table: " + tableName, e);
@@ -961,7 +1033,11 @@ public class SharedCache {
                 aggrStats = new ArrayList<ColumnStatisticsObj>();
               }
               aggrStats.add(StatsType.ALLBUTDEFAULT.ordinal(), statObj.deepCopy());
-              statsSize += getObjectSize(ColumnStatisticsObj.class, statObj);
+              if (columnStatsObjSizeMap != null && columnStatsObjSizeMap.containsKey(statObj)){
+                statsSize += columnStatsObjSizeMap.get(statObj);
+              }else {
+                statsSize += getObjectSize(ColumnStatisticsObj.class, statObj);
+              }
             }
           }
         }
@@ -1009,7 +1085,11 @@ public class SharedCache {
               List<ColumnStatisticsObj> aggrStats = new ArrayList<ColumnStatisticsObj>();
               aggrStats.add(StatsType.ALL.ordinal(), statObj.deepCopy());
               newAggrColStatsCache.put(statObj.getColName(), aggrStats);
-              statsSize += getObjectSize(ColumnStatisticsObj.class, statObj);
+              if (columnStatsObjSizeMap != null && columnStatsObjSizeMap.containsKey(statObj)){
+                statsSize += columnStatsObjSizeMap.get(statObj);
+              }else {
+                statsSize += getObjectSize(ColumnStatisticsObj.class, statObj);
+              }
             }
           }
         }
@@ -1026,7 +1106,11 @@ public class SharedCache {
                 aggrStats = new ArrayList<ColumnStatisticsObj>();
               }
               aggrStats.add(StatsType.ALLBUTDEFAULT.ordinal(), statObj.deepCopy());
-              statsSize += getObjectSize(ColumnStatisticsObj.class, statObj);
+              if (columnStatsObjSizeMap != null && columnStatsObjSizeMap.containsKey(statObj)){
+                statsSize += columnStatsObjSizeMap.get(statObj);
+              }else {
+                statsSize += getObjectSize(ColumnStatisticsObj.class, statObj);
+              }
             }
           }
         }
