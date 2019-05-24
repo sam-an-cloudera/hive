@@ -699,6 +699,46 @@ public class TestCachedStore {
         .tableSizeMap(tableSizeMap).build();
     cachedStore.setSharedCache(sc);
 
+    ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
+    // Prewarm CachedStore
+    CachedStore.setCachePrewarmedState(false);
+    CachedStore.prewarm(objectStore);
+
+
+    List<String> db1Tables = sc.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
+    Assert.assertEquals(0, db1Tables.size());
+    List<String> db2Tables = sc.listCachedTableNames(DEFAULT_CATALOG_NAME, db2.getName());
+    Assert.assertEquals(1, db2Tables.size());
+
+    cachedStore.shutdown();
+  }
+
+  @Test
+  public void testShowTables() throws Exception {
+    Configuration conf = MetastoreConf.newMetastoreConf();
+    MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
+    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "5kb");
+    MetaStoreTestUtils.setConfForStandloneMode(conf);
+    CachedStore cachedStore = new CachedStore();
+    CachedStore.clearSharedCache();
+
+    cachedStore.setConfForTestExceptSharedCache(conf);
+    //set up table size map
+    Map<String, Integer> tableSizeMap = new HashMap<>();
+    String db1Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    String db1Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
+    String db2Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
+    String db2Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+    tableSizeMap.put(db1Utbl1_tblKey, 4000);
+    tableSizeMap.put(db1Ptbl1_tblKey, 4000);
+    tableSizeMap.put(db2Utbl1_tblKey, 4000);
+    tableSizeMap.put(db2Ptbl1_tblKey, 4000);
+
+    SharedCache sc = new SharedCache.Builder()
+        .concurrencyLevel(1)
+        .configuration(conf)
+        .tableSizeMap(tableSizeMap).build();
+    cachedStore.setSharedCache(sc);
 
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
@@ -707,13 +747,14 @@ public class TestCachedStore {
 
 
     List<String> db1Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
-    Assert.assertEquals(0, db1Tables.size());
+    Assert.assertEquals(2, db1Tables.size());
     List<String> db2Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
-    Assert.assertEquals(1, db2Tables.size());
-
+    Assert.assertEquals(2, db2Tables.size());
 
     cachedStore.shutdown();
   }
+
+
 
   @Test
   public void testDropTable() throws Exception {
