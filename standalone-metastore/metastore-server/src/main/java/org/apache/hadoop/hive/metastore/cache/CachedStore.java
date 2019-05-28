@@ -213,7 +213,7 @@ public class CachedStore implements RawStore, Configurable {
 
   @VisibleForTesting
   public static SharedCache getSharedCache() {
-   return sharedCache;
+    return sharedCache;
   }
 
   static private ColumnStatistics updateStatsForAlterPart(RawStore rawStore, Table before, String catalogName,

@@ -91,7 +91,7 @@ public class SharedCache {
   private Set<String> tableToUpdateSize = new ConcurrentHashSet<>();
   private ScheduledExecutorService executor = null;
   private Map<String, Integer> tableSizeMap = null;
-  private Map<Partition, Integer> partitionWrapperSizeMap = null;
+  private Map<String, Integer> partitionWrapperSizeMap = null;
   private Map<ColumnStatisticsObj, Integer> columnStatsObjSizeMap = null;
 
   enum StatsType {
@@ -160,7 +160,7 @@ public class SharedCache {
     private long maxBytes;
     private int refreshInterval = 10000;
     private Configuration conf;
-    private Map<Partition, Integer> partSizeMap;
+    private Map<String, Integer> partSizeMap;
     private Map<ColumnStatisticsObj, Integer> columnStatisticsObjSizeMap;
 
     Builder tableSizeMap(Map<String, Integer> mp){
@@ -187,7 +187,7 @@ public class SharedCache {
       return this;
     }
 
-    Builder partitionWrapperSizeMap(Map<Partition, Integer> map){
+    Builder partitionWrapperSizeMap(Map<String, Integer> map){
       this.partSizeMap = map;
       return this;
     }
@@ -202,12 +202,13 @@ public class SharedCache {
       SharedCache sc =  new SharedCache();
       sc.partitionWrapperSizeMap = this.partSizeMap;
       sc.columnStatsObjSizeMap = this.columnStatisticsObjSizeMap;
-      sc.initialize(conf, refreshInterval, tableSizeMap, concurrencyLevel);
+      sc.tableSizeMap = this.tableSizeMap;
+      sc.initialize(conf, refreshInterval, concurrencyLevel);
       return sc;
     }
   }
 
-  public void initialize(Configuration conf, int refreshInterval, Map<String, Integer> tsm, int concurrencyLevel) {
+  public void initialize(Configuration conf, int refreshInterval, int concurrencyLevel) {
     long maxSharedCacheSizeInBytes =
         MetastoreConf.getSizeVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY);
     maxCacheSizeInBytes = maxSharedCacheSizeInBytes;
@@ -233,7 +234,7 @@ public class SharedCache {
       tableCache = b.recordStats().build();
     }
 
-    tableSizeMap = tsm;
+
     executor = Executors.newScheduledThreadPool(1, new ThreadFactory() {
       @Override public Thread newThread(Runnable r) {
         Thread t = Executors.defaultThreadFactory().newThread(r);
@@ -323,16 +324,9 @@ public class SharedCache {
     private int getTableWrapperSizeWithoutMaps(){
       //facilitate testing only. In production we won't use tableSizeMap at all.
       if (tableSizeMap != null){
-        Table t = this.t;
-        String catName = t.getCatName();
-        String dbName  = t.getDbName();
-        String tblName = t.getTableName();
-        String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
-
+        String tblKey = CacheUtils.buildTableKey(this.t.getCatName(), this.t.getDbName(), this.t.getTableName());
         if (tableSizeMap.containsKey(tblKey)){
           return tableSizeMap.get(tblKey);
-        }else{
-          return 0;
         }
       }
 
@@ -445,22 +439,26 @@ public class SharedCache {
         default:
           break;
       }
+
+      String tblKey = getTblKey();
+      tableToUpdateSize.add(tblKey);
+    }
+
+    String getTblKey(){
       Table t = this.t;
       String catName = t.getCatName();
       String dbName  = t.getDbName();
       String tblName = t.getTableName();
-      String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
-      tableToUpdateSize.add(tblKey);
+      return CacheUtils.buildTableKey(catName, dbName, tblName);
     }
-
     void cachePartition(Partition part, SharedCache sharedCache) {
       try {
         tableLock.writeLock().lock();
         PartitionWrapper wrapper = makePartitionWrapper(part, sharedCache);
         partitionCache.put(CacheUtils.buildPartitionCacheKey(part.getValues()), wrapper);
         int size = 0;
-        if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(wrapper)){
-          size = partitionWrapperSizeMap.get(wrapper);
+        if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(getTblKey())){
+          size = partitionWrapperSizeMap.get(getTblKey());
         }else {
           size = getObjectSize(PartitionWrapper.class, wrapper);
         }
@@ -484,8 +482,8 @@ public class SharedCache {
           PartitionWrapper wrapper = makePartitionWrapper(part, sharedCache);
           partitionCache.put(CacheUtils.buildPartitionCacheKey(part.getValues()), wrapper);
           int size = 0;
-          if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(wrapper)){
-            size = partitionWrapperSizeMap.get(wrapper);
+          if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(getTblKey())){
+            size = partitionWrapperSizeMap.get(getTblKey());
           }else {
             size = getObjectSize(PartitionWrapper.class, wrapper);
           }
@@ -560,8 +558,8 @@ public class SharedCache {
         }
         isPartitionCacheDirty.set(true);
         int size = 0;
-        if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(wrapper)){
-          size = partitionWrapperSizeMap.get(wrapper);
+        if (partitionWrapperSizeMap != null && partitionWrapperSizeMap.containsKey(getTblKey())){
+          size = partitionWrapperSizeMap.get(getTblKey());
         }else {
           size = getObjectSize(PartitionWrapper.class, wrapper);
         }
