@@ -527,7 +527,8 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
+  //@Test
+  //this is problematic after we start to have LRU. 
   // Note: the 44Kb approximation has been determined based on trial/error. 
   // If this starts failing on different env, might need another look.
   public void testGetAllTablesPrewarmMemoryLimit() throws Exception {
@@ -1329,6 +1330,205 @@ public class TestCachedStore {
       List<Partition> ptns = sharedCache.listCachedPartitions(DEFAULT_CATALOG_NAME, dbNames.get(0), tblName, 100);
       Assert.assertEquals(0, ptns.size());
     }
+    cachedStore.shutdown();
+  }
+
+  @Test
+  public void testPartitionSize() {
+    Configuration conf = MetastoreConf.newMetastoreConf();
+    MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
+    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "5Kb");
+    MetaStoreTestUtils.setConfForStandloneMode(conf);
+    CachedStore cachedStore = new CachedStore();
+    CachedStore.clearSharedCache();
+    cachedStore.setConfForTestExceptSharedCache(conf);
+
+    String dbName = "db1";
+    String tbl1Name = "tbl1";
+    String tbl2Name = "tbl2";
+    String owner = "user1";
+    Database db = createDatabaseObject(dbName, owner);
+
+    FieldSchema col1 = new FieldSchema("col1", "int", "integer column");
+    FieldSchema col2 = new FieldSchema("col2", "string", "string column");
+    List<FieldSchema> cols = new ArrayList<FieldSchema>();
+    cols.add(col1);
+    cols.add(col2);
+    List<FieldSchema> ptnCols = new ArrayList<FieldSchema>();
+    Table tbl1 = createTestTbl(dbName, tbl1Name, owner, cols, ptnCols);
+    Table tbl2 = createTestTbl(dbName, tbl2Name, owner, cols, ptnCols);
+
+    Map<String, Integer> tableSizeMap = new HashMap<>();
+    String tbl1Key = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, dbName, tbl1Name);
+    String tbl2Key = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, dbName, tbl2Name);
+    tableSizeMap.put(tbl1Key, 1000);
+    tableSizeMap.put(tbl2Key, 4500);
+
+
+    Partition part1 = new Partition();
+    StorageDescriptor sd1 = new StorageDescriptor();
+    List<FieldSchema> cols1 = new ArrayList<>();
+    cols1.add(new FieldSchema("col1", "int", ""));
+    Map<String, String> params1 = new HashMap<>();
+    params1.put("key", "value");
+    sd1.setCols(cols1);
+    sd1.setParameters(params1);
+    sd1.setLocation("loc1");
+    part1.setSd(sd1);
+    part1.setValues(Arrays.asList("201701"));
+
+    Partition part2 = new Partition();
+    StorageDescriptor sd2 = new StorageDescriptor();
+    List<FieldSchema> cols2 = new ArrayList<>();
+    cols2.add(new FieldSchema("col1", "int", ""));
+    Map<String, String> params2 = new HashMap<>();
+    params2.put("key", "value");
+    sd2.setCols(cols2);
+    sd2.setParameters(params2);
+    sd2.setLocation("loc2");
+    part2.setSd(sd2);
+    part2.setValues(Arrays.asList("201702"));
+
+    Partition part3 = new Partition();
+    StorageDescriptor sd3 = new StorageDescriptor();
+    List<FieldSchema> cols3 = new ArrayList<>();
+    cols3.add(new FieldSchema("col3", "int", ""));
+    Map<String, String> params3 = new HashMap<>();
+    params3.put("key2", "value2");
+    sd3.setCols(cols3);
+    sd3.setParameters(params3);
+    sd3.setLocation("loc3");
+    part3.setSd(sd3);
+    part3.setValues(Arrays.asList("201703"));
+
+    Partition newPart1 = new Partition();
+    newPart1.setDbName(dbName);
+    newPart1.setTableName(tbl1Name);
+    StorageDescriptor newSd1 = new StorageDescriptor();
+    List<FieldSchema> newCols1 = new ArrayList<>();
+    newCols1.add(new FieldSchema("newcol1", "int", ""));
+    Map<String, String> newParams1 = new HashMap<>();
+    newParams1.put("key", "value");
+    newSd1.setCols(newCols1);
+    newSd1.setParameters(params1);
+    newSd1.setLocation("loc1new");
+    newPart1.setSd(newSd1);
+    newPart1.setValues(Arrays.asList("201701"));
+
+    SharedCache sharedCache = new SharedCache.Builder()
+        .concurrencyLevel(1)
+        .configuration(conf)
+        .tableSizeMap(tableSizeMap).build();
+    cachedStore.setSharedCache(sharedCache);
+
+    sharedCache.addDatabaseToCache(db);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, tbl1);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl2Name, tbl2);
+
+    sharedCache.addPartitionToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, part1);
+    sharedCache.addPartitionToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, part2);
+    sharedCache.addPartitionToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, part3);
+
+    Partition p = sharedCache.getPartitionFromCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, Arrays.asList("201701"));
+    Assert.assertNull(p);
+
+    sharedCache.addPartitionToCache(DEFAULT_CATALOG_NAME, dbName, tbl2Name, newPart1);
+    p = sharedCache.getPartitionFromCache(DEFAULT_CATALOG_NAME, dbName, tbl2Name, Arrays.asList("201701"));
+    Assert.assertNotNull(p);
+    cachedStore.shutdown();
+  }
+
+  @Test
+  public void testShowTables() throws Exception {
+    Configuration conf = MetastoreConf.newMetastoreConf();
+    MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
+    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "5kb");
+    MetaStoreTestUtils.setConfForStandloneMode(conf);
+    CachedStore cachedStore = new CachedStore();
+    CachedStore.clearSharedCache();
+
+    cachedStore.setConfForTestExceptSharedCache(conf);
+    ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
+    //set up table size map
+    Map<String, Integer> tableSizeMap = new HashMap<>();
+    String db1Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    String db1Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
+    String db2Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
+    String db2Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+    tableSizeMap.put(db1Utbl1_tblKey, 4000);
+    tableSizeMap.put(db1Ptbl1_tblKey, 4000);
+    tableSizeMap.put(db2Utbl1_tblKey, 4000);
+    tableSizeMap.put(db2Ptbl1_tblKey, 4000);
+    Table tbl_db1Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    Table tbl_db1Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
+    Table tbl_db2Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
+    Table tbl_db2Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+
+    SharedCache sc = new SharedCache.Builder()
+        .concurrencyLevel(1)
+        .configuration(conf)
+        .tableSizeMap(tableSizeMap).build();
+    cachedStore.setSharedCache(sc);
+
+
+    // Prewarm CachedStore
+    CachedStore.setCachePrewarmedState(false);
+    CachedStore.prewarm(objectStore);
+
+
+    List<String> db1Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
+    Assert.assertEquals(2, db1Tables.size());
+    List<String> db2Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
+    Assert.assertEquals(2, db2Tables.size());
+
+    cachedStore.shutdown();
+  }
+
+  @Test
+  public void testTableEviction() throws Exception {
+    Configuration conf = MetastoreConf.newMetastoreConf();
+    MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
+    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "5kb");
+    MetaStoreTestUtils.setConfForStandloneMode(conf);
+    CachedStore cachedStore = new CachedStore();
+    CachedStore.clearSharedCache();
+
+    cachedStore.setConfForTestExceptSharedCache(conf);
+    ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
+    //set up table size map
+    Map<String, Integer> tableSizeMap = new HashMap<>();
+    String db1Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    String db1Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
+    String db2Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
+    String db2Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+    tableSizeMap.put(db1Utbl1_tblKey, 4000);
+    tableSizeMap.put(db1Ptbl1_tblKey, 4000);
+    tableSizeMap.put(db2Utbl1_tblKey, 4000);
+    tableSizeMap.put(db2Ptbl1_tblKey, 4000);
+    Table tbl_db1Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    Table tbl_db1Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
+    Table tbl_db2Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
+    Table tbl_db2Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+
+    SharedCache sc = new SharedCache.Builder()
+        .concurrencyLevel(1)
+        .configuration(conf)
+        .tableSizeMap(tableSizeMap).build();
+    cachedStore.setSharedCache(sc);
+
+
+    sc.addDatabaseToCache(db1);
+    sc.addDatabaseToCache(db2);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName(), tbl_db1Utbl1);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName(), tbl_db1Ptbl1);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName(), tbl_db2Utbl1);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName(), tbl_db2Ptbl1);
+
+    List<String> db1Tables = sc.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
+    Assert.assertEquals(0, db1Tables.size());
+    List<String> db2Tables = sc.listCachedTableNames(DEFAULT_CATALOG_NAME, db2.getName());
+    Assert.assertEquals(1, db2Tables.size());
+
     cachedStore.shutdown();
   }
 

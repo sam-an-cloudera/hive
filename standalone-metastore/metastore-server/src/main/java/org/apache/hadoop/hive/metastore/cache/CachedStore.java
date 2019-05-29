@@ -120,7 +120,7 @@ public class CachedStore implements RawStore, Configurable {
   private Configuration conf;
   private static boolean areTxnStatsSupported;
   private PartitionExpressionProxy expressionProxy = null;
-  private static SharedCache sharedCache = new SharedCache();
+  private static SharedCache sharedCache = null;
   private static  boolean canUseEvents = false;
   private static long lastEventId;
 
@@ -140,9 +140,16 @@ public class CachedStore implements RawStore, Configurable {
    * @param conf
    */
   void setConfForTest(Configuration conf) {
+    setConfForTestExceptSharedCache(conf);
+    initSharedCache(conf);
+  }
+
+  void setConfForTestExceptSharedCache(Configuration conf){
     setConfInternal(conf);
     initBlackListWhiteList(conf);
-    initSharedCache(conf);
+  }
+  void setSharedCache(SharedCache sc){
+    sharedCache = sc;
   }
 
   synchronized private static void triggerUpdateUsingEvent(RawStore rawStore) {
@@ -198,18 +205,15 @@ public class CachedStore implements RawStore, Configurable {
   }
 
   private void initSharedCache(Configuration conf) {
-    long maxSharedCacheSizeInBytes =
-        MetastoreConf.getSizeVar(conf, ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY);
-    sharedCache.initialize(maxSharedCacheSizeInBytes);
-    if (maxSharedCacheSizeInBytes > 0) {
-      LOG.info("Maximum memory that the cache will use: {} KB",
-          maxSharedCacheSizeInBytes / (1024));
-    }
+    SharedCache.Builder builder = new SharedCache.Builder();
+    sharedCache = builder
+                  .configuration(conf)
+                  .build();
   }
 
   @VisibleForTesting
   public static SharedCache getSharedCache() {
-   return sharedCache;
+    return sharedCache;
   }
 
   static private ColumnStatistics updateStatsForAlterPart(RawStore rawStore, Table before, String catalogName,
@@ -1209,7 +1213,11 @@ public class CachedStore implements RawStore, Configurable {
       // let's move this table to the top of tblNamesBeingPrewarmed stack,
       // so that it gets loaded to the cache faster and is available for subsequent requests
       tblsPendingPrewarm.prioritizeTableForPrewarm(tblName);
-      return rawStore.getTable(catName, dbName, tblName, validWriteIds);
+      Table t = rawStore.getTable(catName, dbName, tblName, validWriteIds);
+      if (t != null) {
+        sharedCache.addTableToCache(catName, dbName, tblName, t);
+      }
+      return t;
     }
     if (validWriteIds != null) {
       tbl.setParameters(
@@ -1450,23 +1458,13 @@ public class CachedStore implements RawStore, Configurable {
 
   @Override
   public List<String> getTables(String catName, String dbName, String pattern) throws MetaException {
-    if (!isBlacklistWhitelistEmpty(conf) || !isCachePrewarmed.get() || !isCachedAllMetadata.get() ||
-            (canUseEvents && rawStore.isActiveTransaction())) {
-      return rawStore.getTables(catName, dbName, pattern);
-    }
-    return sharedCache.listCachedTableNames(StringUtils.normalizeIdentifier(catName),
-        StringUtils.normalizeIdentifier(dbName), pattern, -1);
+    return rawStore.getTables(catName, dbName, pattern);
   }
 
   @Override
   public List<String> getTables(String catName, String dbName, String pattern, TableType tableType, int limit)
       throws MetaException {
-    if (!isBlacklistWhitelistEmpty(conf) || !isCachePrewarmed.get()|| !isCachedAllMetadata.get()
-            || (canUseEvents && rawStore.isActiveTransaction())) {
       return rawStore.getTables(catName, dbName, pattern, tableType, limit);
-    }
-    return sharedCache.listCachedTableNames(StringUtils.normalizeIdentifier(catName),
-        StringUtils.normalizeIdentifier(dbName), pattern, tableType, limit);
   }
 
   @Override
@@ -1484,14 +1482,7 @@ public class CachedStore implements RawStore, Configurable {
   @Override
   public List<TableMeta> getTableMeta(String catName, String dbNames, String tableNames, List<String> tableTypes)
       throws MetaException {
-    // TODO Check if all required tables are allowed, if so, get it from cache
-    if (!isBlacklistWhitelistEmpty(conf) || !isCachePrewarmed.get() || !isCachedAllMetadata.get() ||
-            (canUseEvents && rawStore.isActiveTransaction())) {
-      return rawStore.getTableMeta(catName, dbNames, tableNames, tableTypes);
-    }
-    return sharedCache.getTableMeta(StringUtils.normalizeIdentifier(catName),
-        StringUtils.normalizeIdentifier(dbNames),
-        StringUtils.normalizeIdentifier(tableNames), tableTypes);
+    return rawStore.getTableMeta(catName, dbNames, tableNames, tableTypes);
   }
 
   @Override
@@ -1523,6 +1514,7 @@ public class CachedStore implements RawStore, Configurable {
       Table tbl = sharedCache.getTableFromCache(catName, dbName, tblName);
       if (tbl == null) {
         tbl = rawStore.getTable(catName, dbName, tblName);
+        sharedCache.addTableToCache(catName, dbName, tblName, tbl);
       }
       if (tbl != null) {
         tables.add(tbl);
@@ -1534,12 +1526,7 @@ public class CachedStore implements RawStore, Configurable {
 
   @Override
   public List<String> getAllTables(String catName, String dbName) throws MetaException {
-    if (!isBlacklistWhitelistEmpty(conf) || !isCachePrewarmed.get() || !isCachedAllMetadata.get() ||
-            (canUseEvents && rawStore.isActiveTransaction())) {
       return rawStore.getAllTables(catName, dbName);
-    }
-    return sharedCache.listCachedTableNames(StringUtils.normalizeIdentifier(catName),
-        StringUtils.normalizeIdentifier(dbName));
   }
 
   @Override
