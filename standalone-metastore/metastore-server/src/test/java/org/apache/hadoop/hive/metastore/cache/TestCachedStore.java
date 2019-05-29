@@ -26,6 +26,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.ndv.hll.HyperLogLog;
 import org.apache.hadoop.hive.metastore.Deadline;
@@ -61,7 +62,6 @@ import org.apache.hadoop.hive.metastore.columnstats.cache.DoubleColumnStatsDataI
 import org.apache.hadoop.hive.metastore.columnstats.cache.LongColumnStatsDataInspector;
 import org.apache.hadoop.hive.metastore.columnstats.cache.StringColumnStatsDataInspector;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
-import org.apache.hadoop.hive.metastore.conf.MetastoreConf.ConfVars;
 import org.apache.hadoop.hive.metastore.utils.FileUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -69,12 +69,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import jline.internal.Log;
-
 import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
 
-@Category(MetastoreCheckinTest.class)
-public class TestCachedStore {
+@Category(MetastoreCheckinTest.class) public class TestCachedStore {
   // cs_db1
   Database db1;
   // cs_db2
@@ -94,8 +91,7 @@ public class TestCachedStore {
   List<Partition> db2Ptbl1Ptns;
   List<String> db2Ptbl1PtnNames;
 
-  @Before
-  public void setUp() throws Exception {
+  @Before public void setUp() throws Exception {
     Deadline.registerIfNot(10000000);
     Deadline.startTimer("");
     Configuration conf = MetastoreConf.newMetastoreConf();
@@ -130,8 +126,7 @@ public class TestCachedStore {
     objectStore.shutdown();
   }
 
-  @After
-  public void teardown() throws Exception {
+  @After public void teardown() throws Exception {
     Deadline.startTimer("");
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
@@ -155,8 +150,7 @@ public class TestCachedStore {
    * Methods that test CachedStore
    *********************************************************************************************/
 
-  @Test
-  public void testPrewarm() throws Exception {
+  @Test public void testPrewarm() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -199,8 +193,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testPrewarmBlackList() throws Exception {
+  @Test public void testPrewarmBlackList() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -223,8 +216,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testPrewarmWhiteList() throws Exception {
+  @Test public void testPrewarmWhiteList() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -270,8 +262,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testCacheUpdate() throws Exception {
+  @Test public void testCacheUpdate() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -353,8 +344,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testCreateAndGetDatabase() throws Exception {
+  @Test public void testCreateAndGetDatabase() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -379,12 +369,12 @@ public class TestCachedStore {
     Assert.assertEquals(3, allDatabases.size());
     // Add another db via CachedStore
     String dbName1 = "testCreateAndGetDatabase1";
-    Database db1 = createDatabaseObject(dbName1, dbOwner);
-    cachedStore.createDatabase(db1);
-    db1 = cachedStore.getDatabase(DEFAULT_CATALOG_NAME, dbName1);
+    Database localDb1 = createDatabaseObject(dbName1, dbOwner);
+    cachedStore.createDatabase(localDb1);
+    localDb1 = cachedStore.getDatabase(DEFAULT_CATALOG_NAME, dbName1);
     // Read db via ObjectStore
     dbRead = objectStore.getDatabase(DEFAULT_CATALOG_NAME, dbName1);
-    Assert.assertEquals(db1, dbRead);
+    Assert.assertEquals(localDb1, dbRead);
     allDatabases = cachedStore.getAllDatabases(DEFAULT_CATALOG_NAME);
     Assert.assertEquals(4, allDatabases.size());
     // Clean up
@@ -393,8 +383,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testDropDatabase() throws Exception {
+  @Test public void testDropDatabase() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -424,12 +413,12 @@ public class TestCachedStore {
     Assert.assertEquals(2, allDatabases.size());
     // Create another db via CachedStore and drop via ObjectStore
     String dbName1 = "testDropDatabase1";
-    Database db1 = createDatabaseObject(dbName1, dbOwner);
-    cachedStore.createDatabase(db1);
-    db1 = cachedStore.getDatabase(DEFAULT_CATALOG_NAME, dbName1);
+    Database localDb1 = createDatabaseObject(dbName1, dbOwner);
+    cachedStore.createDatabase(localDb1);
+    localDb1 = cachedStore.getDatabase(DEFAULT_CATALOG_NAME, dbName1);
     // Read db via ObjectStore
     dbRead = objectStore.getDatabase(DEFAULT_CATALOG_NAME, dbName1);
-    Assert.assertEquals(db1, dbRead);
+    Assert.assertEquals(localDb1, dbRead);
     allDatabases = cachedStore.getAllDatabases(DEFAULT_CATALOG_NAME);
     Assert.assertEquals(3, allDatabases.size());
     objectStore.dropDatabase(DEFAULT_CATALOG_NAME, dbName1);
@@ -440,8 +429,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testAlterDatabase() throws Exception {
+  @Test public void testAlterDatabase() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -480,8 +468,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testCreateAndGetTable() throws Exception {
+  @Test public void testCreateAndGetTable() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -554,8 +541,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testGetAllTablesBlacklist() throws Exception {
+  @Test public void testGetAllTablesBlacklist() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -580,8 +566,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testGetAllTablesWhitelist() throws Exception {
+  @Test public void testGetAllTablesWhitelist() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -606,8 +591,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testGetTableByPattern() throws Exception {
+  @Test public void testGetTableByPattern() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -632,8 +616,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testAlterTable() throws Exception {
+  @Test public void testAlterTable() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -654,8 +637,8 @@ public class TestCachedStore {
     String newOwner = "newOwner";
     Table db1Utbl1ReadAlt = new Table(db1Utbl1Read);
     db1Utbl1ReadAlt.setOwner(newOwner);
-    cachedStore.alterTable(DEFAULT_CATALOG_NAME, db1Utbl1Read.getDbName(), db1Utbl1Read.getTableName(), db1Utbl1ReadAlt,
-        "0");
+    cachedStore
+        .alterTable(DEFAULT_CATALOG_NAME, db1Utbl1Read.getDbName(), db1Utbl1Read.getTableName(), db1Utbl1ReadAlt, "0");
     db1Utbl1Read =
         cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1ReadAlt.getDbName(), db1Utbl1ReadAlt.getTableName());
     Table db1Utbl1ReadOS =
@@ -665,8 +648,8 @@ public class TestCachedStore {
     Table db2Utbl1Read = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
     Table db2Utbl1ReadAlt = new Table(db2Utbl1Read);
     db2Utbl1ReadAlt.setOwner(newOwner);
-    objectStore.alterTable(DEFAULT_CATALOG_NAME, db2Utbl1Read.getDbName(), db2Utbl1Read.getTableName(), db2Utbl1ReadAlt,
-        "0");
+    objectStore
+        .alterTable(DEFAULT_CATALOG_NAME, db2Utbl1Read.getDbName(), db2Utbl1Read.getTableName(), db2Utbl1ReadAlt, "0");
     updateCache(cachedStore);
     db2Utbl1Read =
         objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1ReadAlt.getDbName(), db2Utbl1ReadAlt.getTableName());
@@ -676,8 +659,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testDropTable() throws Exception {
+  @Test public void testDropTable() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -717,12 +699,11 @@ public class TestCachedStore {
 
   /**********************************************************************************************
    * Methods that test SharedCache
-   * @throws MetaException 
-   * @throws NoSuchObjectException 
+   * @throws MetaException
+   * @throws NoSuchObjectException
    *********************************************************************************************/
 
-  @Test
-  public void testSharedStoreDb() throws NoSuchObjectException, MetaException {
+  @Test public void testSharedStoreDb() throws NoSuchObjectException, MetaException {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -732,13 +713,13 @@ public class TestCachedStore {
     cachedStore.setConfForTest(conf);
     SharedCache sharedCache = CachedStore.getSharedCache();
 
-    Database db1 = createDatabaseObject("db1", "user1");
-    Database db2 = createDatabaseObject("db2", "user1");
-    Database db3 = createDatabaseObject("db3", "user1");
+    Database localDb1 = createDatabaseObject("db1", "user1");
+    Database localDb2 = createDatabaseObject("db2", "user1");
+    Database localDb3 = createDatabaseObject("db3", "user1");
     Database newDb1 = createDatabaseObject("newdb1", "user1");
-    sharedCache.addDatabaseToCache(db1);
-    sharedCache.addDatabaseToCache(db2);
-    sharedCache.addDatabaseToCache(db3);
+    sharedCache.addDatabaseToCache(localDb1);
+    sharedCache.addDatabaseToCache(localDb2);
+    sharedCache.addDatabaseToCache(localDb3);
     Assert.assertEquals(sharedCache.getCachedDatabaseCount(), 3);
     sharedCache.alterDatabaseInCache(DEFAULT_CATALOG_NAME, "db1", newDb1);
     Assert.assertEquals(sharedCache.getCachedDatabaseCount(), 3);
@@ -751,8 +732,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testSharedStoreTable() {
+  @Test public void testSharedStoreTable() {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -837,8 +817,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testSharedStorePartition() {
+  @Test public void testSharedStorePartition() {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -1003,14 +982,14 @@ public class TestCachedStore {
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumNulls(), 100);
     aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames);
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumNulls(), 100);
-    
+
     objectStore.deletePartitionColumnStatistics(DEFAULT_CATALOG_NAME, db.getName(), tbl.getTableName(),
         Warehouse.makePartName(tbl.getPartitionKeys(), partVals1), partVals1, colName);
     objectStore.deletePartitionColumnStatistics(DEFAULT_CATALOG_NAME, db.getName(), tbl.getTableName(),
         Warehouse.makePartName(tbl.getPartitionKeys(), partVals2), partVals2, colName);
     objectStore.dropPartition(DEFAULT_CATALOG_NAME, db.getName(), tbl.getTableName(), partVals1);
     objectStore.dropPartition(DEFAULT_CATALOG_NAME, db.getName(), tbl.getTableName(), partVals2);
-    objectStore.dropTable(DEFAULT_CATALOG_NAME, db.getName(), tbl.getTableName()) ;
+    objectStore.dropTable(DEFAULT_CATALOG_NAME, db.getName(), tbl.getTableName());
     objectStore.dropDatabase(DEFAULT_CATALOG_NAME, db.getName());
     cachedStore.shutdown();
   }
@@ -1186,8 +1165,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testMultiThreadedSharedCacheOps() throws Exception {
+  @Test public void testMultiThreadedSharedCacheOps() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
@@ -1200,8 +1178,7 @@ public class TestCachedStore {
     List<String> dbNames = new ArrayList<String>(Arrays.asList("db1", "db2", "db3", "db4", "db5"));
     List<Callable<Object>> tasks = new ArrayList<Callable<Object>>();
     ExecutorService executor = Executors.newFixedThreadPool(50, new ThreadFactory() {
-      @Override
-      public Thread newThread(Runnable r) {
+      @Override public Thread newThread(Runnable r) {
         Thread t = Executors.defaultThreadFactory().newThread(r);
         t.setDaemon(true);
         return t;
@@ -1333,8 +1310,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testPartitionSize() {
+  @Test public void testPartitionSize() {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "5Kb");
@@ -1363,7 +1339,6 @@ public class TestCachedStore {
     String tbl2Key = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, dbName, tbl2Name);
     tableSizeMap.put(tbl1Key, 1000);
     tableSizeMap.put(tbl2Key, 4500);
-
 
     Partition part1 = new Partition();
     StorageDescriptor sd1 = new StorageDescriptor();
@@ -1415,11 +1390,8 @@ public class TestCachedStore {
     newPart1.setSd(newSd1);
     newPart1.setValues(Arrays.asList("201701"));
 
-    SharedCache sharedCache = new SharedCache.Builder()
-        .concurrencyLevel(1)
-        .configuration(conf)
-        .tableSizeMap(tableSizeMap).build();
-    cachedStore.setSharedCache(sharedCache);
+    SharedCache sharedCache = cachedStore.getSharedCache();
+    new SharedCache.Builder().concurrencyLevel(1).configuration(conf).tableSizeMap(tableSizeMap).build(sharedCache);
 
     sharedCache.addDatabaseToCache(db);
     sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, tbl1);
@@ -1438,8 +1410,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testShowTables() throws Exception {
+  @Test public void testShowTables() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "5kb");
@@ -1451,30 +1422,25 @@ public class TestCachedStore {
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     //set up table size map
     Map<String, Integer> tableSizeMap = new HashMap<>();
-    String db1Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
-    String db1Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
-    String db2Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
-    String db2Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
-    tableSizeMap.put(db1Utbl1_tblKey, 4000);
-    tableSizeMap.put(db1Ptbl1_tblKey, 4000);
-    tableSizeMap.put(db2Utbl1_tblKey, 4000);
-    tableSizeMap.put(db2Ptbl1_tblKey, 4000);
-    Table tbl_db1Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
-    Table tbl_db1Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
-    Table tbl_db2Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
-    Table tbl_db2Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+    String db1Utbl1TblKey =
+        CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    String db1Ptbl1TblKey =
+        CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
+    String db2Utbl1TblKey =
+        CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
+    String db2Ptbl1TblKey =
+        CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+    tableSizeMap.put(db1Utbl1TblKey, 4000);
+    tableSizeMap.put(db1Ptbl1TblKey, 4000);
+    tableSizeMap.put(db2Utbl1TblKey, 4000);
+    tableSizeMap.put(db2Ptbl1TblKey, 4000);
 
-    SharedCache sc = new SharedCache.Builder()
-        .concurrencyLevel(1)
-        .configuration(conf)
-        .tableSizeMap(tableSizeMap).build();
-    cachedStore.setSharedCache(sc);
-
+    SharedCache sc = cachedStore.getSharedCache();
+    new SharedCache.Builder().concurrencyLevel(1).configuration(conf).tableSizeMap(tableSizeMap).build(sc);
 
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
     CachedStore.prewarm(objectStore);
-
 
     List<String> db1Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(2, db1Tables.size());
@@ -1484,8 +1450,7 @@ public class TestCachedStore {
     cachedStore.shutdown();
   }
 
-  @Test
-  public void testTableEviction() throws Exception {
+  @Test public void testTableEviction() throws Exception {
     Configuration conf = MetastoreConf.newMetastoreConf();
     MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "5kb");
@@ -1497,32 +1462,32 @@ public class TestCachedStore {
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     //set up table size map
     Map<String, Integer> tableSizeMap = new HashMap<>();
-    String db1Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
-    String db1Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
-    String db2Utbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
-    String db2Ptbl1_tblKey = CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
-    tableSizeMap.put(db1Utbl1_tblKey, 4000);
-    tableSizeMap.put(db1Ptbl1_tblKey, 4000);
-    tableSizeMap.put(db2Utbl1_tblKey, 4000);
-    tableSizeMap.put(db2Ptbl1_tblKey, 4000);
-    Table tbl_db1Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
-    Table tbl_db1Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
-    Table tbl_db2Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
-    Table tbl_db2Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+    String db1Utbl1TblKey =
+        CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    String db1Ptbl1TblKey =
+        CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
+    String db2Utbl1TblKey =
+        CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
+    String db2Ptbl1TblKey =
+        CacheUtils.buildTableKey(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+    tableSizeMap.put(db1Utbl1TblKey, 4000);
+    tableSizeMap.put(db1Ptbl1TblKey, 4000);
+    tableSizeMap.put(db2Utbl1TblKey, 4000);
+    tableSizeMap.put(db2Ptbl1TblKey, 4000);
+    Table tblDb1Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    Table tblDb1Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
+    Table tblDb2Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
+    Table tblDb2Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
 
-    SharedCache sc = new SharedCache.Builder()
-        .concurrencyLevel(1)
-        .configuration(conf)
-        .tableSizeMap(tableSizeMap).build();
-    cachedStore.setSharedCache(sc);
-
+    SharedCache sc = cachedStore.getSharedCache();
+    new SharedCache.Builder().concurrencyLevel(1).configuration(conf).tableSizeMap(tableSizeMap).build(sc);
 
     sc.addDatabaseToCache(db1);
     sc.addDatabaseToCache(db2);
-    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName(), tbl_db1Utbl1);
-    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName(), tbl_db1Ptbl1);
-    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName(), tbl_db2Utbl1);
-    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName(), tbl_db2Ptbl1);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName(), tblDb1Utbl1);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName(), tblDb1Ptbl1);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName(), tblDb2Utbl1);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName(), tblDb2Ptbl1);
 
     List<String> db1Tables = sc.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(0, db1Tables.size());
