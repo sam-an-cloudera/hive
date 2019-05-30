@@ -98,7 +98,7 @@ public class SharedCache {
   private AtomicBoolean isTableCacheDirty = new AtomicBoolean(false);
   private Map<ByteArrayWrapper, StorageDescriptorWrapper> sdCache = new HashMap<>();
   private static MessageDigest md;
-  static final private Logger LOG = LoggerFactory.getLogger(SharedCache.class.getName());
+  private static final Logger LOG = LoggerFactory.getLogger(SharedCache.class.getName());
   private AtomicLong cacheUpdateCount = new AtomicLong(0);
   private long maxCacheSizeInBytes = -1;
   private static HashMap<Class<?>, ObjectEstimator> sizeEstimators = null;
@@ -134,8 +134,8 @@ public class SharedCache {
 
   static class TableWrapperSizeUpdater implements Runnable {
     private Set<String> setToUpdate;
-    ReentrantReadWriteLock lock;
-    Cache<String, TableWrapper> cache;
+    private ReentrantReadWriteLock lock;
+    private Cache<String, TableWrapper> cache;
 
     TableWrapperSizeUpdater(Set<String> set, ReentrantReadWriteLock lock1, Cache<String, TableWrapper> cache1) {
       setToUpdate = set;
@@ -198,9 +198,7 @@ public class SharedCache {
   }
 
   public void initialize(Configuration conf, int refreshInterval, int concurrencyLevel) {
-    long maxSharedCacheSizeInBytes =
-        MetastoreConf.getSizeVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY);
-    maxCacheSizeInBytes = maxSharedCacheSizeInBytes;
+    maxCacheSizeInBytes = MetastoreConf.getSizeVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY);
 
     // Create estimators
     if ((maxCacheSizeInBytes > 0) && (sizeEstimators == null)) {
@@ -209,7 +207,7 @@ public class SharedCache {
 
     if (tableCache == null) {
       CacheBuilder<String, TableWrapper> b = CacheBuilder.newBuilder()
-          .maximumWeight(maxSharedCacheSizeInBytes > 0 ? maxSharedCacheSizeInBytes : 1024 * 1024)
+          .maximumWeight(maxCacheSizeInBytes > 0 ? maxCacheSizeInBytes : 1024 * 1024)
           .weigher(new Weigher<String, TableWrapper>() {
             @Override public int weigh(String key, TableWrapper value) {
               return value.getSize();
@@ -263,17 +261,17 @@ public class SharedCache {
   }
 
   class TableWrapper {
-    Table t;
-    String location;
-    Map<String, String> parameters;
-    byte[] sdHash;
-    int otherSize;
-    int tableColStatsCacheSize;
-    int partitionCacheSize;
-    int partitionColStatsCacheSize;
-    int aggrColStatsCacheSize;
+    private Table t;
+    private String location;
+    private Map<String, String> parameters;
+    private byte[] sdHash;
+    private int otherSize;
+    private int tableColStatsCacheSize;
+    private int partitionCacheSize;
+    private int partitionColStatsCacheSize;
+    private int aggrColStatsCacheSize;
 
-    ReentrantReadWriteLock tableLock = new ReentrantReadWriteLock(true);
+    private ReentrantReadWriteLock tableLock = new ReentrantReadWriteLock(true);
     // For caching column stats for an unpartitioned table
     // Key is column name and the value is the col stat object
     private Map<String, ColumnStatisticsObj> tableColStatsCache = new ConcurrentHashMap<String, ColumnStatisticsObj>();
@@ -1090,10 +1088,10 @@ public class SharedCache {
   }
 
   static class PartitionWrapper {
-    Partition p;
-    String location;
-    Map<String, String> parameters;
-    byte[] sdHash;
+    private Partition p;
+    private String location;
+    private Map<String, String> parameters;
+    private byte[] sdHash;
 
     PartitionWrapper(Partition p, byte[] sdHash, String location, Map<String, String> parameters) {
       this.p = p;
@@ -1120,8 +1118,8 @@ public class SharedCache {
   }
 
   static class StorageDescriptorWrapper {
-    StorageDescriptor sd;
-    int refCount = 0;
+    private StorageDescriptor sd;
+    private int refCount = 0;
 
     StorageDescriptorWrapper(StorageDescriptor sd, int refCount) {
       this.sd = sd;

@@ -1700,8 +1700,8 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
   }
 
   class TableAndColStats {
-    Table table;
-    ColumnStatistics colStats;
+    private Table table;
+    private ColumnStatistics colStats;
 
     TableAndColStats(Table table, ColumnStatistics colStats) {
       this.table = table;
@@ -1757,8 +1757,8 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
   }
 
   class PartitionObjectsAndNames {
-    List<Partition> ptns;
-    List<String> ptnNames;
+    private List<Partition> ptns;
+    private List<String> ptnNames;
 
     PartitionObjectsAndNames(List<Partition> ptns, List<String> ptnNames) {
       this.ptns = ptns;

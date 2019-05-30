@@ -51,7 +51,6 @@ import org.apache.hadoop.hive.metastore.RawStore;
 import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.Warehouse;
 import org.apache.hadoop.hive.metastore.HiveAlterHandler;
-import org.apache.hadoop.hive.metastore.HiveMetaException;
 import org.apache.hadoop.hive.metastore.api.*;
 import org.apache.hadoop.hive.metastore.cache.SharedCache.StatsType;
 import org.apache.hadoop.hive.metastore.columnstats.aggr.ColumnStatsAggregator;
@@ -124,7 +123,7 @@ public class CachedStore implements RawStore, Configurable {
   private static boolean canUseEvents = false;
   private static long lastEventId;
 
-  static final private Logger LOG = LoggerFactory.getLogger(CachedStore.class.getName());
+  private static final Logger LOG = LoggerFactory.getLogger(CachedStore.class.getName());
 
   @Override public void setConf(Configuration conf) {
     setConfInternal(conf);
@@ -148,7 +147,7 @@ public class CachedStore implements RawStore, Configurable {
     initBlackListWhiteList(conf);
   }
 
-  synchronized private static void triggerUpdateUsingEvent(RawStore rawStore) {
+  private static synchronized void triggerUpdateUsingEvent(RawStore rawStore) {
     if (!isCachePrewarmed.get()) {
       LOG.error("cache update should be done only after prewarm");
       throw new RuntimeException("cache update should be done only after prewarm");
@@ -167,7 +166,7 @@ public class CachedStore implements RawStore, Configurable {
     }
   }
 
-  synchronized private static void triggerPreWarm(RawStore rawStore) {
+  private static synchronized void triggerPreWarm(RawStore rawStore) {
     lastEventId = rawStore.getCurrentNotificationEventId().getEventId();
     prewarm(rawStore);
   }
@@ -201,9 +200,9 @@ public class CachedStore implements RawStore, Configurable {
 
   private void initSharedCache(Configuration conf) {
     synchronized (sharedCacheInited) {
-      if (sharedCacheInited == false) {
+      if (!sharedCacheInited) {
         sharedCacheInited = true;
-      }else{
+      } else {
         return;
       }
     }
@@ -215,7 +214,7 @@ public class CachedStore implements RawStore, Configurable {
     return sharedCache;
   }
 
-  static private ColumnStatistics updateStatsForAlterPart(RawStore rawStore, Table before, String catalogName,
+  private static ColumnStatistics updateStatsForAlterPart(RawStore rawStore, Table before, String catalogName,
       String dbName, String tableName, Partition part) throws Exception {
     ColumnStatistics colStats;
     List<String> deletedCols = new ArrayList<>();
@@ -232,7 +231,7 @@ public class CachedStore implements RawStore, Configurable {
     return colStats;
   }
 
-  static private void updateStatsForAlterTable(RawStore rawStore, Table tblBefore, Table tblAfter, String catalogName,
+  private static void updateStatsForAlterTable(RawStore rawStore, Table tblBefore, Table tblAfter, String catalogName,
       String dbName, String tableName) throws Exception {
     ColumnStatistics colStats = null;
     List<String> deletedCols = new ArrayList<>();
@@ -496,7 +495,7 @@ public class CachedStore implements RawStore, Configurable {
               AggrStats aggrStatsAllButDefaultPartition = null;
               if (!table.getPartitionKeys().isEmpty()) {
                 Deadline.startTimer("getPartitions");
-                partitions = rawStore.getPartitions(catName, dbName, tblName, Integer.MAX_VALUE);
+                partitions = rawStore.getPartitions(catName, dbName, tblName, -1);
                 Deadline.stopTimer();
                 List<String> partNames = new ArrayList<>(partitions.size());
                 for (Partition p : partitions) {
@@ -569,10 +568,10 @@ public class CachedStore implements RawStore, Configurable {
   }
 
   @VisibleForTesting static void clearSharedCache() {
-     synchronized (sharedCacheInited){
-       sharedCacheInited = false;
-     }
-     sharedCache = new SharedCache();
+    synchronized (sharedCacheInited) {
+      sharedCacheInited = false;
+    }
+    sharedCache = new SharedCache();
   }
 
   static void completePrewarm(long startTime, boolean cachedAllMetadata) {
@@ -859,7 +858,7 @@ public class CachedStore implements RawStore, Configurable {
           dbName, tblName);
       try {
         Deadline.startTimer("getPartitions");
-        List<Partition> partitions = rawStore.getPartitions(catName, dbName, tblName, Integer.MAX_VALUE);
+        List<Partition> partitions = rawStore.getPartitions(catName, dbName, tblName, -1);
         Deadline.stopTimer();
         sharedCache
             .refreshPartitionsInCache(StringUtils.normalizeIdentifier(catName), StringUtils.normalizeIdentifier(dbName),
@@ -944,10 +943,8 @@ public class CachedStore implements RawStore, Configurable {
           sharedCache.refreshAggregateStatsInCache(StringUtils.normalizeIdentifier(catName),
               StringUtils.normalizeIdentifier(dbName), StringUtils.normalizeIdentifier(tblName), aggrStatsAllPartitions,
               aggrStatsAllButDefaultPartition, null);
-          LOG.debug(
-              "CachedStore: updated cached aggregate partition col stats objects for catalog:"
-                  + " {}, database: {}, table: {}",
-              catName, dbName, tblName);
+          LOG.debug("CachedStore: updated cached aggregate partition col stats objects for catalog:"
+              + " {}, database: {}, table: {}", catName, dbName, tblName);
         }
       } catch (MetaException | NoSuchObjectException e) {
         LOG.info("Updating CachedStore: unable to read aggregate column stats of table: " + tblName, e);
@@ -1269,29 +1266,29 @@ public class CachedStore implements RawStore, Configurable {
     return succ;
   }
 
-  @Override public Partition getPartition(String catName, String dbName, String tblName, List<String> part_vals)
+  @Override public Partition getPartition(String catName, String dbName, String tblName, List<String> partVals)
       throws MetaException, NoSuchObjectException {
-    return getPartition(catName, dbName, tblName, part_vals, null);
+    return getPartition(catName, dbName, tblName, partVals, null);
   }
 
-  @Override public Partition getPartition(String catName, String dbName, String tblName, List<String> part_vals,
+  @Override public Partition getPartition(String catName, String dbName, String tblName, List<String> partVals,
       String validWriteIds) throws MetaException, NoSuchObjectException {
     catName = normalizeIdentifier(catName);
     dbName = StringUtils.normalizeIdentifier(dbName);
     tblName = StringUtils.normalizeIdentifier(tblName);
     if (!shouldCacheTable(catName, dbName, tblName) || (canUseEvents && rawStore.isActiveTransaction())) {
-      return rawStore.getPartition(catName, dbName, tblName, part_vals, validWriteIds);
+      return rawStore.getPartition(catName, dbName, tblName, partVals, validWriteIds);
     }
-    Partition part = sharedCache.getPartitionFromCache(catName, dbName, tblName, part_vals);
+    Partition part = sharedCache.getPartitionFromCache(catName, dbName, tblName, partVals);
     if (part == null) {
       // The table containing the partition is not yet loaded in cache
-      return rawStore.getPartition(catName, dbName, tblName, part_vals, validWriteIds);
+      return rawStore.getPartition(catName, dbName, tblName, partVals, validWriteIds);
     }
     if (validWriteIds != null) {
       Table table = sharedCache.getTableFromCache(catName, dbName, tblName);
       if (table == null) {
         // The table containing the partition is not yet loaded in cache
-        return rawStore.getPartition(catName, dbName, tblName, part_vals, validWriteIds);
+        return rawStore.getPartition(catName, dbName, tblName, partVals, validWriteIds);
       }
       part.setParameters(
           adjustStatsParamsForGet(table.getParameters(), part.getParameters(), part.getWriteId(), validWriteIds));
@@ -1301,24 +1298,24 @@ public class CachedStore implements RawStore, Configurable {
   }
 
   @Override public boolean doesPartitionExist(String catName, String dbName, String tblName, List<FieldSchema> partKeys,
-      List<String> part_vals) throws MetaException, NoSuchObjectException {
+      List<String> partVals) throws MetaException, NoSuchObjectException {
     catName = normalizeIdentifier(catName);
     dbName = StringUtils.normalizeIdentifier(dbName);
     tblName = StringUtils.normalizeIdentifier(tblName);
     if (!shouldCacheTable(catName, dbName, tblName) || (canUseEvents && rawStore.isActiveTransaction())) {
-      return rawStore.doesPartitionExist(catName, dbName, tblName, partKeys, part_vals);
+      return rawStore.doesPartitionExist(catName, dbName, tblName, partKeys, partVals);
     }
     Table tbl = sharedCache.getTableFromCache(catName, dbName, tblName);
     if (tbl == null) {
       // The table containing the partition is not yet loaded in cache
-      return rawStore.doesPartitionExist(catName, dbName, tblName, partKeys, part_vals);
+      return rawStore.doesPartitionExist(catName, dbName, tblName, partKeys, partVals);
     }
-    return sharedCache.existPartitionFromCache(catName, dbName, tblName, part_vals);
+    return sharedCache.existPartitionFromCache(catName, dbName, tblName, partVals);
   }
 
-  @Override public boolean dropPartition(String catName, String dbName, String tblName, List<String> part_vals)
+  @Override public boolean dropPartition(String catName, String dbName, String tblName, List<String> partVals)
       throws MetaException, NoSuchObjectException, InvalidObjectException, InvalidInputException {
-    boolean succ = rawStore.dropPartition(catName, dbName, tblName, part_vals);
+    boolean succ = rawStore.dropPartition(catName, dbName, tblName, partVals);
     // in case of event based cache update, cache will be updated during commit.
     if (succ && !canUseEvents) {
       catName = normalizeIdentifier(catName);
@@ -1327,7 +1324,7 @@ public class CachedStore implements RawStore, Configurable {
       if (!shouldCacheTable(catName, dbName, tblName)) {
         return succ;
       }
-      sharedCache.removePartitionFromCache(catName, dbName, tblName, part_vals);
+      sharedCache.removePartitionFromCache(catName, dbName, tblName, partVals);
     }
     return succ;
   }
