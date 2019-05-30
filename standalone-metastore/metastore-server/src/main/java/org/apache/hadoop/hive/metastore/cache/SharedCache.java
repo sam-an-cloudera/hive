@@ -169,7 +169,6 @@ public class SharedCache {
   public static class Builder {
     private Map<String, Integer> tableSizeMap = null;
     private int concurrencyLevel = -1;
-    private long maxBytes;
     private int refreshInterval = 10000;
     private Configuration conf;
 
@@ -185,11 +184,6 @@ public class SharedCache {
 
     Builder concurrencyLevel(int cl) {
       this.concurrencyLevel = cl;
-      return this;
-    }
-
-    Builder maxSharedCacheSizeInBytes(long b) {
-      this.maxBytes = b;
       return this;
     }
 
