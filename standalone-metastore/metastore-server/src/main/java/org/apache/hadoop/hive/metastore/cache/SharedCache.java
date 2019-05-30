@@ -100,9 +100,7 @@ public class SharedCache {
   private static MessageDigest md;
   static final private Logger LOG = LoggerFactory.getLogger(SharedCache.class.getName());
   private AtomicLong cacheUpdateCount = new AtomicLong(0);
-  private static volatile long maxCacheSizeInBytes = -1;
-  private static long currentCacheSizeInBytes = 0;
-  private static String myLock = "lock";
+  private long maxCacheSizeInBytes = -1;
   private static HashMap<Class<?>, ObjectEstimator> sizeEstimators = null;
   private Set<String> tableToUpdateSize = new ConcurrentHashSet<>();
   private ScheduledExecutorService executor = null;
@@ -205,10 +203,8 @@ public class SharedCache {
     maxCacheSizeInBytes = maxSharedCacheSizeInBytes;
 
     // Create estimators
-    synchronized (myLock) {
-      if ((maxCacheSizeInBytes > 0) && (sizeEstimators == null)) {
-        sizeEstimators = IncrementalObjectSizeEstimator.createEstimators(SharedCache.class);
-      }
+    if ((maxCacheSizeInBytes > 0) && (sizeEstimators == null)) {
+      sizeEstimators = IncrementalObjectSizeEstimator.createEstimators(SharedCache.class);
     }
 
     if (tableCache == null) {
@@ -223,7 +219,6 @@ public class SharedCache {
       if (concurrencyLevel > 0) {
         b.concurrencyLevel(concurrencyLevel);
       }
-
       tableCache = b.recordStats().build();
     }
 

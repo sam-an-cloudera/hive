@@ -119,6 +119,7 @@ public class CachedStore implements RawStore, Configurable {
   private Configuration conf;
   private static boolean areTxnStatsSupported;
   private PartitionExpressionProxy expressionProxy = null;
+  private static Boolean sharedCacheInited = false;
   private static SharedCache sharedCache = new SharedCache();
   private static boolean canUseEvents = false;
   private static long lastEventId;
@@ -199,6 +200,13 @@ public class CachedStore implements RawStore, Configurable {
   }
 
   private void initSharedCache(Configuration conf) {
+    synchronized (sharedCacheInited) {
+      if (sharedCacheInited == false) {
+        sharedCacheInited = true;
+      }else{
+        return;
+      }
+    }
     SharedCache.Builder builder = new SharedCache.Builder();
     builder.configuration(conf).build(sharedCache);
   }
@@ -561,7 +569,10 @@ public class CachedStore implements RawStore, Configurable {
   }
 
   @VisibleForTesting static void clearSharedCache() {
-    sharedCache = new SharedCache();
+     synchronized (sharedCacheInited){
+       sharedCacheInited = false;
+     }
+     sharedCache = new SharedCache();
   }
 
   static void completePrewarm(long startTime, boolean cachedAllMetadata) {
