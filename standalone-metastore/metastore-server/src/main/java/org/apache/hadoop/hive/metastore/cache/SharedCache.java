@@ -101,7 +101,7 @@ public class SharedCache {
   private static final Logger LOG = LoggerFactory.getLogger(SharedCache.class.getName());
   private AtomicLong cacheUpdateCount = new AtomicLong(0);
   private long maxCacheSizeInBytes = -1;
-  private static HashMap<Class<?>, ObjectEstimator> sizeEstimators = null;
+  private HashMap<Class<?>, ObjectEstimator> sizeEstimators = null;
   private Set<String> tableToUpdateSize = new ConcurrentHashSet<>();
   private ScheduledExecutorService executor = null;
   private Map<String, Integer> tableSizeMap = null;
@@ -164,6 +164,9 @@ public class SharedCache {
     }
   }
 
+  /**
+   * Builder class for changing parameter of shared cache
+   */
   public static class Builder {
     private Map<String, Integer> tableSizeMap = null;
     private int concurrencyLevel = -1;
@@ -233,7 +236,7 @@ public class SharedCache {
 
   }
 
-  private static ObjectEstimator getMemorySizeEstimator(Class<?> clazz) {
+  private ObjectEstimator getMemorySizeEstimator(Class<?> clazz) {
     ObjectEstimator estimator = sizeEstimators.get(clazz);
     if (estimator == null) {
       IncrementalObjectSizeEstimator.createEstimators(clazz, sizeEstimators);
@@ -242,7 +245,7 @@ public class SharedCache {
     return estimator;
   }
 
-  public static int getObjectSize(Class<?> clazz, Object obj) {
+  public int getObjectSize(Class<?> clazz, Object obj) {
     if (sizeEstimators == null) {
       return 0;
     }

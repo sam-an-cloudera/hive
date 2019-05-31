@@ -118,7 +118,8 @@ public class CachedStore implements RawStore, Configurable {
   private Configuration conf;
   private static boolean areTxnStatsSupported;
   private PartitionExpressionProxy expressionProxy = null;
-  private static Boolean sharedCacheInited = false;
+  private static String lock = "L";
+  private static boolean sharedCacheInited = false;
   private static SharedCache sharedCache = new SharedCache();
   private static boolean canUseEvents = false;
   private static long lastEventId;
@@ -199,7 +200,7 @@ public class CachedStore implements RawStore, Configurable {
   }
 
   private void initSharedCache(Configuration conf) {
-    synchronized (sharedCacheInited) {
+    synchronized (lock) {
       if (!sharedCacheInited) {
         sharedCacheInited = true;
       } else {
@@ -568,7 +569,7 @@ public class CachedStore implements RawStore, Configurable {
   }
 
   @VisibleForTesting static void clearSharedCache() {
-    synchronized (sharedCacheInited) {
+    synchronized (lock) {
       sharedCacheInited = false;
     }
     sharedCache = new SharedCache();

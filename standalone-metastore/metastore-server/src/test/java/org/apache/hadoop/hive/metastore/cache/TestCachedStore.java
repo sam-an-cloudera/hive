@@ -71,6 +71,9 @@ import org.junit.experimental.categories.Category;
 
 import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
 
+/**
+ * Unit tests for CachedStore
+ */
 @Category(MetastoreCheckinTest.class) public class TestCachedStore {
   // cs_db1
   Database db1;
@@ -514,8 +517,6 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     cachedStore.shutdown();
   }
 
-  //@Test
-  //this is problematic after we start to have LRU. 
   // Note: the 44Kb approximation has been determined based on trial/error. 
   // If this starts failing on different env, might need another look.
   public void testGetAllTablesPrewarmMemoryLimit() throws Exception {
