@@ -105,6 +105,7 @@ import org.apache.hadoop.hive.ql.log.PerfLogger;
 import org.apache.hadoop.hive.ql.metadata.AuthorizationException;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hadoop.hive.ql.metadata.HiveStorageHandler;
 import org.apache.hadoop.hive.ql.metadata.Partition;
 import org.apache.hadoop.hive.ql.metadata.Table;
 import org.apache.hadoop.hive.ql.metadata.formatting.JsonMetaDataFormatter;
@@ -1398,6 +1399,8 @@ public class Driver implements IDriver {
       String className = null;
       String ownerName = null;
       PrincipalType ownerType = null;
+      HiveStorageHandler handler = null;
+      Table table = null;
       switch(privObject.getType()){
       case DATABASE:
         dbname = privObject.getDatabase().getName();
@@ -1405,12 +1408,16 @@ public class Driver implements IDriver {
         ownerType = privObject.getDatabase().getOwnerType();
         break;
       case TABLE:
-        dbname = privObject.getTable().getDbName();
-        objName = privObject.getTable().getTableName();
+        table = privObject.getTable();
+        dbname = table.getDbName();
+        objName = table.getTableName();
         columns = tableName2Cols == null ? null :
             tableName2Cols.get(Table.getCompleteName(dbname, objName));
-        ownerName = privObject.getTable().getOwner();
-        ownerType = privObject.getTable().getOwnerType();
+        ownerName = table.getOwner();
+        ownerType = table.getOwnerType();
+        if (table.getStorageHandler() != null){
+          handler = handler;
+        }
         break;
       case DFS_DIR:
       case LOCAL_DIR:
@@ -1435,7 +1442,7 @@ public class Driver implements IDriver {
       }
       HivePrivObjectActionType actionType = AuthorizationUtils.getActionType(privObject);
       HivePrivilegeObject hPrivObject = new HivePrivilegeObject(privObjType, dbname, objName,
-          partKeys, columns, actionType, null, className, ownerName, ownerType);
+          partKeys, columns, actionType, null, className, ownerName, ownerType, table, handler);
       hivePrivobjs.add(hPrivObject);
     }
     return hivePrivobjs;

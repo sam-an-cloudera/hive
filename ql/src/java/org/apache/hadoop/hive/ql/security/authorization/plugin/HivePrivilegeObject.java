@@ -25,6 +25,8 @@ import java.util.List;
 import org.apache.hadoop.classification.InterfaceStability.Evolving;
 import org.apache.hadoop.hive.common.classification.InterfaceAudience.LimitedPrivate;
 import org.apache.hadoop.hive.metastore.api.PrincipalType;
+import org.apache.hadoop.hive.ql.metadata.HiveStorageHandler;
+import org.apache.hadoop.hive.ql.metadata.Table;
 
 /**
  * Represents the object on which privilege is being granted/revoked, and objects
@@ -141,6 +143,9 @@ public class HivePrivilegeObject implements Comparable<HivePrivilegeObject> {
   // For example, rowFilterExpression can be "key % 2 = 0 and key < 10" and it
   // is applied to the table.
   private String rowFilterExpression;
+  private final Table tableMetadata;
+  private final HiveStorageHandler storageHandler;
+
 
   public HivePrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName) {
     this(type, dbname, objectName, HivePrivObjectActionType.OTHER);
@@ -170,21 +175,23 @@ public class HivePrivilegeObject implements Comparable<HivePrivilegeObject> {
 
   public HivePrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName,
     List<String> partKeys, List<String> columns, List<String> commandParams) {
-    this(type, dbname, objectName, partKeys, columns, HivePrivObjectActionType.OTHER, commandParams, null);
+    this(type, dbname, objectName, partKeys, columns, HivePrivObjectActionType.OTHER, commandParams,
+        null, null, null, null, null);
   }
 
   public HivePrivilegeObject(String dbname, String objectName, List<String> columns) {
-    this(HivePrivilegeObjectType.TABLE_OR_VIEW, dbname, objectName, null, columns, null);
+    this(HivePrivilegeObjectType.TABLE_OR_VIEW, dbname, objectName, null, columns,
+        null, null, null);
   }
 
   public HivePrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName, List<String> partKeys,
       List<String> columns, HivePrivObjectActionType actionType, List<String> commandParams, String className) {
-    this(type, dbname, objectName, partKeys, columns, actionType, commandParams, className, null, null);
+    this(type, dbname, objectName, partKeys, columns, actionType, commandParams, className, null, null, null, null);
   }
 
   public HivePrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName, List<String> partKeys,
       List<String> columns, HivePrivObjectActionType actionType, List<String> commandParams, String className,
-      String ownerName, PrincipalType ownerType) {
+      String ownerName, PrincipalType ownerType, Table tablemetadata, HiveStorageHandler storageHandler) {
     this.type = type;
     this.dbname = dbname;
     this.objectName = objectName;
@@ -195,6 +202,8 @@ public class HivePrivilegeObject implements Comparable<HivePrivilegeObject> {
     this.className = className;
     this.ownerName = ownerName;
     this.ownerType = ownerType;
+    this.tableMetadata = tablemetadata;
+    this.storageHandler = storageHandler;
   }
 
   public HivePrivilegeObjectType getType() {
@@ -225,6 +234,10 @@ public class HivePrivilegeObject implements Comparable<HivePrivilegeObject> {
 
   public List<String> getCommandParams() {
     return commandParams;
+  }
+
+  public HiveStorageHandler getStorageHandler() {
+    return storageHandler;
   }
 
   /**

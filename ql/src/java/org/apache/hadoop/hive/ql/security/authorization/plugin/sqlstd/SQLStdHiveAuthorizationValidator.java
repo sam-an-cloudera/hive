@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import org.apache.hadoop.hive.ql.metadata.HiveStorageHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.fs.Path;
@@ -142,6 +143,11 @@ public class SQLStdHiveAuthorizationValidator implements HiveAuthorizationValida
         // standard authorization.
         continue;
       default:
+        //TODO: move this to ranger code base
+        if( hiveObj.getStorageHandler() != null){
+          HiveStorageHandler handler = hiveObj.getStorageHandler();
+          handler.authorize(userName);
+        }
         availPrivs = SQLAuthorizationUtils.getPrivilegesFromMetaStore(metastoreClient, userName,
             hiveObj, privController.getCurrentRoleNames(), privController.isUserAdmin());
       }
