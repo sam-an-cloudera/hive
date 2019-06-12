@@ -25,8 +25,11 @@ import java.util.List;
 import org.apache.hadoop.classification.InterfaceStability.Evolving;
 import org.apache.hadoop.hive.common.classification.InterfaceAudience.LimitedPrivate;
 import org.apache.hadoop.hive.metastore.api.PrincipalType;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.HiveStorageHandler;
 import org.apache.hadoop.hive.ql.metadata.Table;
+import org.apache.hadoop.hive.ql.security.authorization.HiveAuthorizationProvider;
+import org.apache.hadoop.hive.ql.security.authorization.Privilege;
 
 /**
  * Represents the object on which privilege is being granted/revoked, and objects
@@ -339,5 +342,15 @@ public class HivePrivilegeObject implements Comparable<HivePrivilegeObject> {
 
   public void setRowFilterExpression(String rowFilterExpression) {
     this.rowFilterExpression = rowFilterExpression;
+  }
+
+  public void authorizeWithStorageHandler() throws HiveException {
+    if (storageHandler != null){
+      HiveAuthorizationProvider authorizationProvider = storageHandler.getAuthorizationProvider();
+      Table t = new Table();
+      Privilege[] readPrivileges = null;
+      Privilege[] writePrivileges = null;
+      authorizationProvider.authorize(t, readPrivileges, writePrivileges );
+    }
   }
 }
