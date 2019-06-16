@@ -135,6 +135,7 @@ import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.security.authorization.AuthorizationUtils;
 import org.apache.hadoop.hive.ql.security.authorization.HiveAuthorizationProvider;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveAuthzContext;
+import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveHbaseStorageHandlerPrivilegeObject;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveOperationType;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject.HivePrivObjectActionType;
@@ -1441,8 +1442,14 @@ public class Driver implements IDriver {
           throw new AssertionError("Unexpected object type");
       }
       HivePrivObjectActionType actionType = AuthorizationUtils.getActionType(privObject);
-      HivePrivilegeObject hPrivObject = new HivePrivilegeObject(privObjType, dbname, objName,
-          partKeys, columns, actionType, null, className, ownerName, ownerType, table, handler);
+      HivePrivilegeObject hPrivObject;
+      if (handler instanceof HiveStorageHandler){
+        hPrivObject = new HiveHbaseStorageHandlerPrivilegeObject(privObjType, dbname, objName, partKeys, columns,
+            actionType, null, className, tableMeta, handler);
+      }else {
+        hPrivObject =new HivePrivilegeObject(privObjType, dbname, objName, partKeys, columns,
+            actionType, null, className);
+      }
       hivePrivobjs.add(hPrivObject);
     }
     return hivePrivobjs;
