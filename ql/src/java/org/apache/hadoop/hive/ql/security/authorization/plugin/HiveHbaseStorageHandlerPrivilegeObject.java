@@ -1,5 +1,6 @@
 package org.apache.hadoop.hive.ql.security.authorization.plugin;
 
+import org.apache.hadoop.hive.metastore.HiveMetaHook;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.HiveStorageHandler;
 import org.apache.hadoop.hive.ql.metadata.Table;
@@ -29,6 +30,8 @@ public class HiveHbaseStorageHandlerPrivilegeObject extends HivePrivilegeObject 
         readPrivileges[0] = Privilege.CREATE;
       }
       Privilege[] writePrivileges= null;
+      HiveMetaHook hook = storageHandler.getMetaHook();
+
       authProvider.authorize(this.tableMetadata, readPrivileges, writePrivileges);
     }
   }
