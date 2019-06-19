@@ -1,5 +1,6 @@
 package org.apache.hadoop.hive.ql.security.authorization.plugin;
 
+import org.apache.hadoop.hive.metastore.api.PrincipalType;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.HiveStorageHandler;
 import org.apache.hadoop.hive.ql.metadata.Table;
@@ -13,9 +14,9 @@ public class HiveStorageHandlerPrivilegeObject extends HivePrivilegeObject {
   protected final Table tableMetadata;
   public HiveStorageHandlerPrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName,
       List<String> partKeys, List<String> columns, HivePrivObjectActionType actionType, List<String> commandParams,
-      String className, Table tableMetadata,
+      String className, String ownerName, PrincipalType ownerType, Table tableMetadata,
       HiveStorageHandler storageHandler) {
-    super(type, dbname, objectName, partKeys, columns, actionType, commandParams, className);
+    super(type, dbname, objectName, partKeys, columns, actionType, commandParams, className, ownerName, ownerType);
     this.tableMetadata = tableMetadata;
     this.storageHandler = storageHandler;
   }

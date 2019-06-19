@@ -1446,10 +1446,10 @@ public class Driver implements IDriver {
       HivePrivilegeObject hPrivObject;
       if (handler instanceof HiveStorageHandler){
         hPrivObject = new HiveStorageHandlerPrivilegeObject(privObjType, dbname, objName, partKeys, columns,
-            actionType, null, className, tableMeta, handler);
+            actionType, null, className, ownerName, ownerType, table, handler);
       }else {
         hPrivObject =new HivePrivilegeObject(privObjType, dbname, objName, partKeys, columns,
-            actionType, null, className);
+            actionType, null, className, ownerName, ownerType, null, null);
       }
       hivePrivobjs.add(hPrivObject);
     }

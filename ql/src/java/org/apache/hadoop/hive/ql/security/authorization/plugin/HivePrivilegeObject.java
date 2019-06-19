@@ -156,14 +156,14 @@ public class HivePrivilegeObject implements Comparable<HivePrivilegeObject> {
 
   public HivePrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName
       , HivePrivObjectActionType actionType) {
-    this(type, dbname, objectName, null, null, actionType, null, null);
+    this(type, dbname, objectName, null, null, actionType, null, null, null, null);
   }
 
   public HivePrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName,
       List<String> partKeys, String column) {
     this(type, dbname, objectName, partKeys,
         column == null ? null : Arrays.asList(column),
-        HivePrivObjectActionType.OTHER, null, null);
+        HivePrivObjectActionType.OTHER, null, null, null, null);
   }
 
   /**
@@ -184,12 +184,12 @@ public class HivePrivilegeObject implements Comparable<HivePrivilegeObject> {
 
   public HivePrivilegeObject(String dbname, String objectName, List<String> columns) {
     this(HivePrivilegeObjectType.TABLE_OR_VIEW, dbname, objectName, null, columns,
-        null, null, null);
+        null, null, null, null, null);
   }
 
   public HivePrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName, List<String> partKeys,
-      List<String> columns, HivePrivObjectActionType actionType, List<String> commandParams, String className) {
-    this(type, dbname, objectName, partKeys, columns, actionType, commandParams, className, null, null, null, null);
+      List<String> columns, HivePrivObjectActionType actionType, List<String> commandParams, String className, String ownerName, PrincipalType ownerType) {
+    this(type, dbname, objectName, partKeys, columns, actionType, commandParams, className, ownerName, ownerType, null, null);
   }
 
   public HivePrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName, List<String> partKeys,
