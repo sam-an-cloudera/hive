@@ -4,6 +4,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.ConnectionUtils;
+import org.apache.hadoop.hbase.security.access.Permission;
 import org.apache.hadoop.hbase.security.access.UserPermission;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.MetaException;
@@ -22,7 +23,10 @@ import java.util.List;
 public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBase {
   private Connection hbaseConnection;
   private Admin admin;
-  @Override public void init(Configuration conf) throws HiveException {
+  @Override
+  public void init(Configuration conf) throws HiveException {
+    hive_db = new HiveProxy();
+    setConf(conf);
     try {
       if (admin == null) {
         hbaseConnection = ConnectionFactory.createConnection(conf);
@@ -47,13 +51,18 @@ public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBas
       throws HiveException, AuthorizationException {
     String userName = authenticator.getUserName();
     //check if the user has read/write access to the table
-
     try {
       List<UserPermission> permissionList = AccessControlClient.getUserPermissions(hbaseConnection, userName);
       for (UserPermission perm : permissionList){
+        //if (perm.implies(table.getTableName(),  )
         if (perm.hasTable()){
           if (perm.getTableName().equals(table.getTableName())){
-            return;
+            Permission.Action[] actions = perm.getActions();
+            for (Permission.Action action: actions){
+              if(action.equals(Permission.Action.CREATE)){
+                return;
+              }
+            }
           }
         }
       }
