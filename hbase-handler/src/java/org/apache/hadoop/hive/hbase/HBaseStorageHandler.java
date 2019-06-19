@@ -157,7 +157,12 @@ public class HBaseStorageHandler extends DefaultStorageHandler
     return new HBaseMetaHook(hbaseConf);
   }
 
-  @Override public HiveAuthorizationProvider getAuthorizationProvider() throws HiveException {
+  @Override
+  public HiveAuthorizationProvider getAuthorizationProvider() throws HiveException {
+    if (authorizationProvider == null){
+      authorizationProvider = new HiveHBaseAuthorizationProvider();
+      authorizationProvider.init(hbaseConf);
+    }
     return authorizationProvider;
   }
 

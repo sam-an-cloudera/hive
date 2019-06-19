@@ -25,6 +25,7 @@ import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.HiveStorageHandler;
 import org.apache.hadoop.hive.ql.security.authorization.HiveAuthorizationProvider;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveHbaseStorageHandlerPrivilegeObject;
+import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveStorageHandlerPrivilegeObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.fs.Path;
@@ -147,9 +148,9 @@ public class SQLStdHiveAuthorizationValidator implements HiveAuthorizationValida
         continue;
       default:
         //TODO: move this to ranger code base
-        if( hiveObj instanceof HiveHbaseStorageHandlerPrivilegeObject ){
+        if( hiveObj instanceof HiveStorageHandlerPrivilegeObject){
           try {
-            HiveHbaseStorageHandlerPrivilegeObject authProv = (HiveHbaseStorageHandlerPrivilegeObject)hiveObj;
+            HiveStorageHandlerPrivilegeObject authProv = (HiveStorageHandlerPrivilegeObject)hiveObj;
             authProv.authorizeAction(hiveOpType);
           } catch (HiveException e) {
             e.printStackTrace();

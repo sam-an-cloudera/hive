@@ -140,6 +140,7 @@ import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveOperationType
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject.HivePrivObjectActionType;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject.HivePrivilegeObjectType;
+import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveStorageHandlerPrivilegeObject;
 import org.apache.hadoop.hive.ql.session.LineageState;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.hive.ql.session.SessionState.LogHelper;
@@ -1444,7 +1445,7 @@ public class Driver implements IDriver {
       HivePrivObjectActionType actionType = AuthorizationUtils.getActionType(privObject);
       HivePrivilegeObject hPrivObject;
       if (handler instanceof HiveStorageHandler){
-        hPrivObject = new HiveHbaseStorageHandlerPrivilegeObject(privObjType, dbname, objName, partKeys, columns,
+        hPrivObject = new HiveStorageHandlerPrivilegeObject(privObjType, dbname, objName, partKeys, columns,
             actionType, null, className, tableMeta, handler);
       }else {
         hPrivObject =new HivePrivilegeObject(privObjType, dbname, objName, partKeys, columns,
