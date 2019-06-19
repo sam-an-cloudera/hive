@@ -47,10 +47,13 @@ import org.apache.hadoop.hive.ql.exec.FunctionRegistry;
 import org.apache.hadoop.hive.ql.index.IndexPredicateAnalyzer;
 import org.apache.hadoop.hive.ql.index.IndexSearchCondition;
 import org.apache.hadoop.hive.ql.metadata.DefaultStorageHandler;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.HiveStoragePredicateHandler;
 import org.apache.hadoop.hive.ql.plan.ExprNodeDesc;
 import org.apache.hadoop.hive.ql.plan.ExprNodeGenericFuncDesc;
 import org.apache.hadoop.hive.ql.plan.TableDesc;
+import org.apache.hadoop.hive.ql.security.authorization.HiveAuthorizationProvider;
+import org.apache.hadoop.hive.ql.security.authorization.HiveHBaseAuthorizationProvider;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDFOPEqual;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDFOPEqualOrGreaterThan;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDFOPEqualOrLessThan;
@@ -109,6 +112,7 @@ public class HBaseStorageHandler extends DefaultStorageHandler
 
   private Configuration jobConf;
   private Configuration hbaseConf;
+  private HiveHBaseAuthorizationProvider authorizationProvider;
 
   @Override
   public Configuration getConf() {
@@ -151,6 +155,10 @@ public class HBaseStorageHandler extends DefaultStorageHandler
   @Override
   public HiveMetaHook getMetaHook() {
     return new HBaseMetaHook(hbaseConf);
+  }
+
+  @Override public HiveAuthorizationProvider getAuthorizationProvider() throws HiveException {
+    return authorizationProvider;
   }
 
   @Override

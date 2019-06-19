@@ -1,9 +1,12 @@
 package org.apache.hadoop.hive.ql.security.authorization;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.client.Admin;
+import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.ConnectionUtils;
 import org.apache.hadoop.hbase.security.access.UserPermission;
 import org.apache.hadoop.hive.metastore.api.Database;
+import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.AuthorizationException;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.metadata.Partition;
@@ -11,13 +14,23 @@ import org.apache.hadoop.hive.ql.metadata.Table;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveHbaseStorageHandlerPrivilegeObject;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.security.access.AccessControlClient;
+import org.apache.hadoop.util.StringUtils;
 
+import java.io.IOException;
 import java.util.List;
 
 public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBase {
-  Connection hbaseConnection;
+  private Connection hbaseConnection;
+  private Admin admin;
   @Override public void init(Configuration conf) throws HiveException {
-    hbaseConnection = null;
+    try {
+      if (admin == null) {
+        hbaseConnection = ConnectionFactory.createConnection(conf);
+        admin = hbaseConnection.getAdmin();
+      }
+    } catch (IOException ioe) {
+      throw new HiveException(StringUtils.stringifyException(ioe));
+    }
   }
 
   @Override public void authorize(Privilege[] readRequiredPriv, Privilege[] writeRequiredPriv)
@@ -37,11 +50,19 @@ public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBas
 
     try {
       List<UserPermission> permissionList = AccessControlClient.getUserPermissions(hbaseConnection, userName);
-
+      for (UserPermission perm : permissionList){
+        if (perm.hasTable()){
+          if (perm.getTableName().equals(table.getTableName())){
+            return;
+          }
+        }
+      }
     } catch (Throwable throwable) {
       throwable.printStackTrace();
       throw new HiveException("Cannot get user permission from HBase");
     }
+
+    throw new AuthorizationException("user is not authorized");
 
   }
 

@@ -30,8 +30,6 @@ public class HiveHbaseStorageHandlerPrivilegeObject extends HivePrivilegeObject 
         readPrivileges[0] = Privilege.CREATE;
       }
       Privilege[] writePrivileges= null;
-      HiveMetaHook hook = storageHandler.getMetaHook();
-
       authProvider.authorize(this.tableMetadata, readPrivileges, writePrivileges);
     }
   }
