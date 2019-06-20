@@ -19,7 +19,7 @@ public class HiveHbaseStorageHandlerPrivilegeObject extends HiveStorageHandlerPr
   }
 
   @Override
-  public void authorizeAction(HiveOperationType opType) throws HiveException {
+  public void authorizeAction(StoragePrivilege privsRequested) throws HiveException {
     HiveAuthorizationProvider authProvider = storageHandler.getAuthorizationProvider();
     if (authProvider != null){
       Privilege[] readPrivileges = new Privilege[1];

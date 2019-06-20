@@ -12,6 +12,13 @@ import java.util.List;
 public class HiveStorageHandlerPrivilegeObject extends HivePrivilegeObject {
   protected final HiveStorageHandler storageHandler;
   protected final Table tableMetadata;
+  public enum StoragePrivilege{
+    CREATE,
+    READ,
+    UPDATE,
+    DELETE
+  };
+
   public HiveStorageHandlerPrivilegeObject(HivePrivilegeObjectType type, String dbname, String objectName,
       List<String> partKeys, List<String> columns, HivePrivObjectActionType actionType, List<String> commandParams,
       String className, String ownerName, PrincipalType ownerType, Table tableMetadata,
@@ -21,8 +28,9 @@ public class HiveStorageHandlerPrivilegeObject extends HivePrivilegeObject {
     this.storageHandler = storageHandler;
   }
 
-  public void authorizeAction(HiveOperationType opType) throws HiveException {
+  public void authorizeAction(StoragePrivilege privsRequested) throws HiveException {
     throw new HiveException("Not implemented for this storage handler");
   }
 
+  //ranger
 }
