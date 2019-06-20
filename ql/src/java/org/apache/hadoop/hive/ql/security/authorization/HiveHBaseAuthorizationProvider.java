@@ -50,7 +50,10 @@ public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBas
   @Override public void authorize(Table table, Privilege[] readRequiredPriv, Privilege[] writeRequiredPriv)
       throws HiveException, AuthorizationException {
     String userName = authenticator.getUserName();
-    //check if the user has read/write access to the table
+    /**
+     * TODO: Use HBase AccessControlClient to get the user permissions and compare them against the required RW
+     * privileges.
+     */
     try {
       List<UserPermission> permissionList = AccessControlClient.getUserPermissions(hbaseConnection, userName);
       for (UserPermission perm : permissionList){

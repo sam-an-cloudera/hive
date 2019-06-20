@@ -147,11 +147,14 @@ public class SQLStdHiveAuthorizationValidator implements HiveAuthorizationValida
         // standard authorization.
         continue;
       default:
-        //TODO: move this to ranger code base
+        //TODO: Understand how Ranger Authorizer's checkPrivileges can figure out what StoragePrivileges to pass in.
         if( hiveObj instanceof HiveStorageHandlerPrivilegeObject){
           try {
             HiveStorageHandlerPrivilegeObject authProv = (HiveStorageHandlerPrivilegeObject)hiveObj;
-            authProv.authorizeAction(hiveOpType);
+            if ( hiveOpType == HiveOperationType.CREATETABLE){
+              authProv.authorizeAction(HiveStorageHandlerPrivilegeObject.StoragePrivilege.CREATE);
+            }
+
           } catch (HiveException e) {
             e.printStackTrace();
           }
