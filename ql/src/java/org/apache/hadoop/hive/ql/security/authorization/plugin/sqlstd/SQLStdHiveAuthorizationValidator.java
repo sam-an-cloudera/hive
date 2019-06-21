@@ -147,18 +147,6 @@ public class SQLStdHiveAuthorizationValidator implements HiveAuthorizationValida
         // standard authorization.
         continue;
       default:
-        //TODO: Understand how Ranger Authorizer's checkPrivileges can figure out what StoragePrivileges to pass in.
-        if( hiveObj instanceof HiveStorageHandlerPrivilegeObject){
-          try {
-            HiveStorageHandlerPrivilegeObject authProv = (HiveStorageHandlerPrivilegeObject)hiveObj;
-            if ( hiveOpType == HiveOperationType.CREATETABLE){
-              authProv.authorizeAction(HiveStorageHandlerPrivilegeObject.StoragePrivilege.CREATE);
-            }
-
-          } catch (HiveException e) {
-            e.printStackTrace();
-          }
-        }
         availPrivs = SQLAuthorizationUtils.getPrivilegesFromMetaStore(metastoreClient, userName,
             hiveObj, privController.getCurrentRoleNames(), privController.isUserAdmin());
       }

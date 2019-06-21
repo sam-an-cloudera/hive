@@ -56,6 +56,7 @@ public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBas
      */
     try {
       List<UserPermission> permissionList = AccessControlClient.getUserPermissions(hbaseConnection, userName);
+      //??Question: what if Ranger is there serving as authorizer for HBase as well, how does it work here?
       for (UserPermission perm : permissionList){
         //if (perm.implies(table.getTableName(),  )
         if (perm.hasTable()){

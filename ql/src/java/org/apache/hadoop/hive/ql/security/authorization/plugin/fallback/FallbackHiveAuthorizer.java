@@ -21,6 +21,7 @@ package org.apache.hadoop.hive.ql.security.authorization.plugin.fallback;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.parse.SemanticException;
 import org.apache.hadoop.hive.ql.security.HiveAuthenticationProvider;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.AbstractHiveAuthorizer;
@@ -29,12 +30,14 @@ import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveAccessControl
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveAuthzContext;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveAuthzPluginException;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveAuthzSessionContext;
+import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveHbaseStorageHandlerPrivilegeObject;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveOperationType;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrincipal;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilege;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeInfo;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HivePrivilegeObject;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveRoleGrant;
+import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveStorageHandlerPrivilegeObject;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.SettableConfigUpdater;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.sqlstd.Operation2Privilege;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.sqlstd.SQLAuthorizationUtils;
@@ -158,6 +161,7 @@ public class FallbackHiveAuthorizer extends AbstractHiveAuthorizer {
       return; // Skip rest of checks if user is admin
     }
 
+
     // Special-casing for ADMIN-level operations that do not require object checking.
     if (Operation2Privilege.isAdminPrivOperation(hiveOpType)) {
       // Require ADMIN privilege
@@ -167,6 +171,18 @@ public class FallbackHiveAuthorizer extends AbstractHiveAuthorizer {
 
     boolean needAdmin = false;
     for (HivePrivilegeObject hiveObj : hiveObjects) {
+      //TODO: Understand how Ranger Authorizer's checkPrivileges can figure out what StoragePrivileges to pass in.
+      if( hiveObj instanceof HiveStorageHandlerPrivilegeObject){
+        try {
+          HiveStorageHandlerPrivilegeObject authProv = (HiveStorageHandlerPrivilegeObject)hiveObj;
+          if ( hiveOpType == HiveOperationType.CREATETABLE){
+            authProv.authorizeAction(HiveStorageHandlerPrivilegeObject.StoragePrivilege.CREATE);
+          }
+        } catch (HiveException e) {
+          deniedMessages.add("User does not have CREATE privilege on HBase");
+        }
+      }
+
       // If involving local file system
       if (hiveObj.getType() == HivePrivilegeObject.HivePrivilegeObjectType.LOCAL_URI) {
         needAdmin = true;

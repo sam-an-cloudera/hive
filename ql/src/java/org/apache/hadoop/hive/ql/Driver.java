@@ -1417,9 +1417,7 @@ public class Driver implements IDriver {
             tableName2Cols.get(Table.getCompleteName(dbname, objName));
         ownerName = table.getOwner();
         ownerType = table.getOwnerType();
-        if (table.getStorageHandler() != null){
-          handler = handler;
-        }
+        handler = table.getStorageHandler();
         break;
       case DFS_DIR:
       case LOCAL_DIR:
@@ -1444,12 +1442,12 @@ public class Driver implements IDriver {
       }
       HivePrivObjectActionType actionType = AuthorizationUtils.getActionType(privObject);
       HivePrivilegeObject hPrivObject;
-      if (handler instanceof HiveStorageHandler){
-        hPrivObject = new HiveStorageHandlerPrivilegeObject(privObjType, dbname, objName, partKeys, columns,
+      if (handler != null){ //TODO: this is prototype code, remove later.
+        hPrivObject = new HiveHbaseStorageHandlerPrivilegeObject(privObjType, dbname, objName, partKeys, columns,
             actionType, null, className, ownerName, ownerType, table, handler);
       }else {
         hPrivObject =new HivePrivilegeObject(privObjType, dbname, objName, partKeys, columns,
-            actionType, null, className, ownerName, ownerType, null, null);
+            actionType, null, className, ownerName, ownerType);
       }
       hivePrivobjs.add(hPrivObject);
     }
