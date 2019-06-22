@@ -6,10 +6,12 @@ import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.ConnectionUtils;
 import org.apache.hadoop.hbase.security.access.Permission;
 import org.apache.hadoop.hbase.security.access.UserPermission;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.AuthorizationException;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hadoop.hive.ql.metadata.HiveUtils;
 import org.apache.hadoop.hive.ql.metadata.Partition;
 import org.apache.hadoop.hive.ql.metadata.Table;
 import org.apache.hadoop.hive.ql.security.authorization.plugin.HiveHbaseStorageHandlerPrivilegeObject;
@@ -26,7 +28,8 @@ public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBas
   @Override
   public void init(Configuration conf) throws HiveException {
     hive_db = new HiveProxy();
-    setConf(conf);
+    //TODO: maybe this shoud be HIVE_METASTORE_AUTHENTICATOR_MANAGER? double check later
+    authenticator = HiveUtils.getAuthenticator(conf, HiveConf.ConfVars.HIVE_AUTHENTICATOR_MANAGER);
     try {
       if (admin == null) {
         hbaseConnection = ConnectionFactory.createConnection(conf);

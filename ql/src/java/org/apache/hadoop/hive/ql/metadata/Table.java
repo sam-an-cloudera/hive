@@ -321,6 +321,18 @@ public class Table implements Serializable {
     return storageHandler;
   }
 
+  public void setStorageHandler(String storageHandlerName){
+    if (storageHandlerName != null && this.storageHandler == null){
+      try {
+        storageHandler = HiveUtils.getStorageHandler(
+            SessionState.getSessionConf(),
+            storageHandlerName);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
   final public Class<? extends InputFormat> getInputFormatClass() {
     if (inputFormatClass == null) {
       try {
