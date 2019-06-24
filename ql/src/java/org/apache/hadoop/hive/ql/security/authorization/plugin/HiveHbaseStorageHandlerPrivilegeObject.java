@@ -21,16 +21,24 @@ public class HiveHbaseStorageHandlerPrivilegeObject extends HiveStorageHandlerPr
   @Override
   public void authorizeAction(StoragePrivilege privsRequested) throws HiveException {
     HiveAuthorizationProvider authProvider = storageHandler.getAuthorizationProvider();
-
-    /**
-     * TODO: we need to translate StoragePrivileges passed in from Authorizer
-     *      into Privilege array that AuthorizationProvider understands. Then we pass
-     *     them down to AuthorizationProvider.authorize call.
-      */
+    //mapping the StorageHandler privileges to AuthProvider privilege types.
     if (authProvider != null){
       Privilege[] readPrivileges = new Privilege[1];
-      if (privsRequested == StoragePrivilege.CREATE){
+      switch (privsRequested){
+      case CREATE:
         readPrivileges[0] = Privilege.CREATE;
+        break;
+      case READ:
+        readPrivileges[0] = Privilege.SELECT;
+        break;
+      case UPDATE:
+        readPrivileges[0] = Privilege.ALTER_DATA;
+        break;
+      case DELETE:
+        readPrivileges[0] = Privilege.DELETE;
+        break;
+      default:
+        throw new HiveException("Wrong type of Storage Handler privilege requested.");
       }
       Privilege[] writePrivileges= null;
       authProvider.authorize(this.tableMetadata, readPrivileges, writePrivileges);

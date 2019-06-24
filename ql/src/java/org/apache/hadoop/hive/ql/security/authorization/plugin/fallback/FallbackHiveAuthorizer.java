@@ -171,18 +171,21 @@ public class FallbackHiveAuthorizer extends AbstractHiveAuthorizer {
 
     boolean needAdmin = false;
     for (HivePrivilegeObject hiveObj : hiveObjects) {
-      //TODO: Understand how Ranger Authorizer's checkPrivileges can figure out what StoragePrivileges to pass in.
       if( hiveObj instanceof HiveStorageHandlerPrivilegeObject){
         try {
-          HiveStorageHandlerPrivilegeObject authProv = (HiveStorageHandlerPrivilegeObject)hiveObj;
-          if ( hiveOpType == HiveOperationType.CREATETABLE){
-            authProv.authorizeAction(HiveStorageHandlerPrivilegeObject.StoragePrivilege.CREATE);
+          HiveStorageHandlerPrivilegeObject storageHandlerPrivilegeObject = (HiveStorageHandlerPrivilegeObject)hiveObj;
+          switch (hiveOpType){
+          case CREATETABLE:
+            storageHandlerPrivilegeObject.authorizeAction(HiveStorageHandlerPrivilegeObject.StoragePrivilege.CREATE);
+            break;
+          default:
+            break;
           }
+
         } catch (HiveException e) {
-          deniedMessages.add("User does not have CREATE privilege on HBase");
+          deniedMessages.add("User does not have enough privilege on Storage Handler based table.");
         }
       }
-
       // If involving local file system
       if (hiveObj.getType() == HivePrivilegeObject.HivePrivilegeObjectType.LOCAL_URI) {
         needAdmin = true;

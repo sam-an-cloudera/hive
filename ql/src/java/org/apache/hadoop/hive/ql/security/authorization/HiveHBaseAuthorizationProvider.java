@@ -1,6 +1,7 @@
 package org.apache.hadoop.hive.ql.security.authorization;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Admin;
 import org.apache.hadoop.hbase.client.ConnectionFactory;
 import org.apache.hadoop.hbase.client.ConnectionUtils;
@@ -56,23 +57,21 @@ public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBas
   @Override public void authorize(Table table, Privilege[] readRequiredPriv, Privilege[] writeRequiredPriv)
       throws HiveException, AuthorizationException {
     String userName = authenticator.getUserName();
-    /**
-     * TODO: Use HBase AccessControlClient to get the user permissions and compare them against the required RW
-     * privileges.
-     */
     try {
       List<UserPermission> permissionList = AccessControlClient.getUserPermissions(hbaseConnection, userName);
-      //??Question: what if Ranger is there serving as authorizer for HBase as well, how does it work here?
-      for (UserPermission perm : permissionList){
-        //if (perm.implies(table.getTableName(),  )
-        if (perm.hasTable()){
-          if (perm.getTableName().equals(table.getTableName())){
-            Permission.Action[] actions = perm.getActions();
-            for (Permission.Action action: actions){
-              if(action.equals(Permission.Action.CREATE)){
-                return;
-              }
-            }
+      //TODO: Ramesh had this question: what if Ranger is there serving as authorizer for HBase as well, how does it work here?
+      if (readRequiredPriv != null){
+        for (Privilege priv: readRequiredPriv){
+          if (!hasRightAuthorization(table, priv, permissionList)){
+            throw new AuthorizationException("User is not authorized on HBase table");
+          }
+        }
+      }
+
+      if (writeRequiredPriv != null){
+        for (Privilege priv: writeRequiredPriv){
+          if (!hasRightAuthorization(table, priv, permissionList)){
+            throw new AuthorizationException("User is not authorized on HBase table");
           }
         }
       }
@@ -80,9 +79,27 @@ public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBas
       throwable.printStackTrace();
       throw new HiveException("Cannot get user permission from HBase");
     }
+  }
 
-    throw new AuthorizationException("user is not authorized");
-
+  private boolean hasRightAuthorization(Table table, Privilege priv, List<UserPermission> perms){
+    TableName hbaseTableName = null; //TODO: translate table name to hbaseTableName
+    for (UserPermission perm : perms){
+      switch (priv.getPriv()) {
+        case CREATE:
+        case ALTER_METADATA:
+          if (perm.implies(hbaseTableName, null, null, Permission.Action.CREATE)
+             || perm.hasTable() && perm.getTableName().equals(table.getTableName())){
+              return true;
+          }
+          break;
+        case INSERT:
+        case DELETE:
+         break;
+      default:
+        break;
+      }
+    }
+    return false;
   }
 
   @Override public void authorize(Partition part, Privilege[] readRequiredPriv, Privilege[] writeRequiredPriv)
