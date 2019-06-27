@@ -28,7 +28,7 @@ public class HiveStorageHandlerPrivilegeObject extends HivePrivilegeObject {
     this.storageHandler = storageHandler;
   }
 
-  public void authorizeAction(StoragePrivilege privsRequested) throws HiveException {
+  public void authorizeAction(List<StoragePrivilege> privsRequested) throws HiveException {
     throw new HiveException("Not implemented for this storage handler");
   }
 

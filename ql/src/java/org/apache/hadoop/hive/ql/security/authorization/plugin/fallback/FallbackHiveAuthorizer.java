@@ -174,9 +174,13 @@ public class FallbackHiveAuthorizer extends AbstractHiveAuthorizer {
       if( hiveObj instanceof HiveStorageHandlerPrivilegeObject){
         try {
           HiveStorageHandlerPrivilegeObject storageHandlerPrivilegeObject = (HiveStorageHandlerPrivilegeObject)hiveObj;
+          List<HiveStorageHandlerPrivilegeObject.StoragePrivilege> privileges = new ArrayList<>();
           switch (hiveOpType){
           case CREATETABLE:
-            storageHandlerPrivilegeObject.authorizeAction(HiveStorageHandlerPrivilegeObject.StoragePrivilege.CREATE);
+            privileges.add(HiveStorageHandlerPrivilegeObject.StoragePrivilege.CREATE);
+            privileges.add(HiveStorageHandlerPrivilegeObject.StoragePrivilege.READ);
+            privileges.add(HiveStorageHandlerPrivilegeObject.StoragePrivilege.UPDATE);
+            storageHandlerPrivilegeObject.authorizeAction(privileges);
             break;
           default:
             break;

@@ -58,8 +58,12 @@ public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBas
       throws HiveException, AuthorizationException {
     String userName = authenticator.getUserName();
     try {
+      /**
+       * TODO: this is for "Native" HBase authorization. What to do if Ranger is the authorizer for HBase.
+       *       A better way might be to implement in HBase an API that basically returns true/false
+       *       for <User, Table, Permissions> query.
+       */
       List<UserPermission> permissionList = AccessControlClient.getUserPermissions(hbaseConnection, userName);
-      //TODO: Ramesh had this question: what if Ranger is there serving as authorizer for HBase as well, how does it work here?
       if (readRequiredPriv != null){
         for (Privilege priv: readRequiredPriv){
           if (!hasRightAuthorization(table, priv, permissionList)){
@@ -80,9 +84,17 @@ public class HiveHBaseAuthorizationProvider extends HiveAuthorizationProviderBas
       throw new HiveException("Cannot get user permission from HBase");
     }
   }
-
+  //Copied from HBaseSerDe. Import causes circular reference.
+  public static final String HBASE_TABLE_NAME = "hbase.table.name";
   private boolean hasRightAuthorization(Table table, Privilege priv, List<UserPermission> perms){
-    TableName hbaseTableName = null; //TODO: translate table name to hbaseTableName
+    /**
+     * TODO: translate table name to hbaseTableName. The mapping should be in TableProperties
+     */
+    String tableName = table.getParameters().get(HBASE_TABLE_NAME);
+    if (tableName == null) {
+      return true;
+    }
+    TableName hbaseTableName = TableName.valueOf(tableName);
     for (UserPermission perm : perms){
       switch (priv.getPriv()) {
         case CREATE:
