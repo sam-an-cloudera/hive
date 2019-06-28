@@ -381,7 +381,7 @@ public class MetastoreDefaultTransformer implements IMetaStoreMetadataTransforme
         table = tableCache.get(dbName + "." + tableName);
       } else {
         try {
-          table = hmsHandler.get_table_core(MetaStoreUtils.getDefaultCatalog(null), dbName, tableName);
+          table = hmsHandler.get_table_core(MetaStoreUtils.getDefaultCatalog(null), dbName, tableName, null);
         } catch (Exception e) {
           throw new MetaException("Could not load table " + tableName + ":" + e.getMessage());
         }

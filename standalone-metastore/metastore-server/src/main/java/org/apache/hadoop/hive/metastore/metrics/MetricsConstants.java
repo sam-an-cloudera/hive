@@ -45,4 +45,7 @@ public class MetricsConstants {
   public static final String TOTAL_DATABASES = "total_count_dbs";
   public static final String TOTAL_TABLES = "total_count_tables";
   public static final String TOTAL_PARTITIONS = "total_count_partitions";
+
+  public static final String METADATA_CACHE_HIT = "metadata_cache_hit";
+  public static final String METADATA_CACHE_MISS = "metadata_cache_miss";
 }

@@ -29,6 +29,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.ValidTxnList;
+import org.apache.hadoop.hive.common.ValidTxnWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
 import org.apache.hadoop.hive.common.classification.RetrySemantics;
 import org.apache.hadoop.hive.metastore.annotation.NoReconnect;
@@ -3982,4 +3983,6 @@ public interface IMetaStoreClient {
    * @return String representation of the version number of Metastore server (eg: 3.1.0-SNAPSHOT)
    */
   String getServerVersion() throws TException;
+
+  void setValidWriteIdList(String txnWriteIdList);
 }

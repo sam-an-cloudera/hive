@@ -67,10 +67,12 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.hive.common.FileUtils;
+import org.apache.hadoop.hive.common.JavaUtils;
 import org.apache.hadoop.hive.common.ObjectPair;
 import org.apache.hadoop.hive.common.StatsSetupConst;
 import org.apache.hadoop.hive.common.StatsSetupConst.StatDB;
 import org.apache.hadoop.hive.common.StringInternUtils;
+import org.apache.hadoop.hive.common.TableName;
 import org.apache.hadoop.hive.common.ValidTxnList;
 import org.apache.hadoop.hive.common.ValidTxnWriteIdList;
 import org.apache.hadoop.hive.common.metrics.common.MetricsConstant;
@@ -12266,6 +12268,26 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       return false;
     }
     LOG.info("Completed phase 1 of Semantic Analysis");
+
+    // 5. Get write id for tables
+    List<String> tabNames = new ArrayList<>();
+    for (String alias : qb.getTabAliases()) {
+      String tabName = qb.getTabNameForAlias(alias);
+      tabName = TableName.fromString(tabName, SessionState.get().getCurrentCatalog(), SessionState.get().getCurrentDatabase()).getDbTable();
+      tabNames.add(tabName);
+    }
+    String txnString = conf.get(ValidTxnList.VALID_TXNS_KEY);
+    if ((txnString == null) || (txnString.isEmpty())) {
+      throw new IllegalStateException("calling recordValidWritsIdss() without initializing ValidTxnList " +
+              JavaUtils.txnIdToString(getTxnMgr().getCurrentTxnId()));
+    }
+    try {
+      ValidTxnWriteIdList txnWriteIds = getTxnMgr().getValidWriteIds(tabNames, txnString);
+      db.getMSC().setValidWriteIdList(txnWriteIds.toString());
+      Hive.get().getMSC().setValidWriteIdList(txnWriteIds.toString());
+    } catch (HiveException|MetaException e) {
+      throw new SemanticException("Failed to fetch write Id", e);
+    }
 
     // 5. Resolve Parse Tree
     // Materialization is allowed if it is not a view definition

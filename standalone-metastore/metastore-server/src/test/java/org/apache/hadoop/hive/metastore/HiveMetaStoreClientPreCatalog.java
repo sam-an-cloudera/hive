@@ -57,6 +57,7 @@ import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.StatsSetupConst;
 import org.apache.hadoop.hive.common.ValidTxnList;
+import org.apache.hadoop.hive.common.ValidTxnWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
 import org.apache.hadoop.hive.metastore.api.*;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
@@ -1253,21 +1254,21 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
   @Override
   public List<Partition> listPartitions(String db_name, String tbl_name,
       short max_parts) throws NoSuchObjectException, MetaException, TException {
-    List<Partition> parts = client.get_partitions(db_name, tbl_name, max_parts);
+    List<Partition> parts = client.get_partitions(db_name, tbl_name, max_parts, null);
     return fastpath ? parts : deepCopyPartitions(filterHook.filterPartitions(parts));
   }
 
   @Override
   public PartitionSpecProxy listPartitionSpecs(String dbName, String tableName, int maxParts) throws TException {
     return PartitionSpecProxy.Factory.get(filterHook.filterPartitionSpecs(
-        client.get_partitions_pspec(dbName, tableName, maxParts)));
+        client.get_partitions_pspec(dbName, tableName, maxParts, null)));
   }
 
   @Override
   public List<Partition> listPartitions(String db_name, String tbl_name,
       List<String> part_vals, short max_parts)
       throws NoSuchObjectException, MetaException, TException {
-    List<Partition> parts = client.get_partitions_ps(db_name, tbl_name, part_vals, max_parts);
+    List<Partition> parts = client.get_partitions_ps(db_name, tbl_name, part_vals, max_parts, null);
     return fastpath ? parts : deepCopyPartitions(filterHook.filterPartitions(parts));
   }
 
@@ -1276,7 +1277,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
       String tbl_name, short max_parts, String user_name, List<String> group_names)
        throws NoSuchObjectException, MetaException, TException {
     List<Partition> parts = client.get_partitions_with_auth(db_name, tbl_name, max_parts,
-        user_name, group_names);
+        user_name, group_names, null);
     return fastpath ? parts :deepCopyPartitions(filterHook.filterPartitions(parts));
   }
 
@@ -1286,7 +1287,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
       String user_name, List<String> group_names) throws NoSuchObjectException,
       MetaException, TException {
     List<Partition> parts = client.get_partitions_ps_with_auth(db_name,
-        tbl_name, part_vals, max_parts, user_name, group_names);
+        tbl_name, part_vals, max_parts, user_name, group_names, null);
     return fastpath ? parts : deepCopyPartitions(filterHook.filterPartitions(parts));
   }
 
@@ -1308,7 +1309,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
   public List<Partition> listPartitionsByFilter(String db_name, String tbl_name,
       String filter, short max_parts) throws MetaException,
          NoSuchObjectException, TException {
-    List<Partition> parts = client.get_partitions_by_filter(db_name, tbl_name, filter, max_parts);
+    List<Partition> parts = client.get_partitions_by_filter(db_name, tbl_name, filter, max_parts, null);
     return fastpath ? parts :deepCopyPartitions(filterHook.filterPartitions(parts));
   }
 
@@ -1317,7 +1318,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
                                                        String filter, int max_parts) throws MetaException,
          NoSuchObjectException, TException {
     return PartitionSpecProxy.Factory.get(filterHook.filterPartitionSpecs(
-        client.get_part_specs_by_filter(db_name, tbl_name, filter, max_parts)));
+        client.get_part_specs_by_filter(db_name, tbl_name, filter, max_parts, null)));
   }
 
   @Override
@@ -1383,7 +1384,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
   @Override
   public Partition getPartition(String db_name, String tbl_name,
       List<String> part_vals) throws NoSuchObjectException, MetaException, TException {
-    Partition p = client.get_partition(db_name, tbl_name, part_vals);
+    Partition p = client.get_partition(db_name, tbl_name, part_vals, null);
     return fastpath ? p : deepCopy(filterHook.filterPartition(p));
   }
 
@@ -1416,7 +1417,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
       throws MetaException, UnknownTableException, NoSuchObjectException,
       TException {
     Partition p = client.get_partition_with_auth(db_name, tbl_name, part_vals, user_name,
-        group_names);
+        group_names, null);
     return fastpath ? p : deepCopy(filterHook.filterPartition(p));
   }
 
@@ -1597,7 +1598,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
   public List<String> listPartitionNames(String dbName, String tblName,
       short max) throws NoSuchObjectException, MetaException, TException {
     return filterHook.filterPartitionNames(null, dbName, tblName,
-        client.get_partition_names(dbName, tblName, max));
+        client.get_partition_names(dbName, tblName, max, null));
   }
 
   @Override
@@ -1605,7 +1606,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
       List<String> part_vals, short max_parts)
       throws MetaException, TException, NoSuchObjectException {
     return filterHook.filterPartitionNames(null, db_name, tbl_name,
-        client.get_partition_names_ps(db_name, tbl_name, part_vals, max_parts));
+        client.get_partition_names_ps(db_name, tbl_name, part_vals, max_parts, null));
   }
 
   /**
@@ -1624,7 +1625,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
   public int getNumPartitionsByFilter(String db_name, String tbl_name,
                                       String filter) throws MetaException,
           NoSuchObjectException, TException {
-    return client.get_num_partitions_by_filter(db_name, tbl_name, filter);
+    return client.get_num_partitions_by_filter(db_name, tbl_name, filter, null);
   }
 
   @Override
@@ -1689,7 +1690,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
   public List<FieldSchema> getFields(String db, String tableName)
       throws MetaException, TException, UnknownTableException,
       UnknownDBException {
-    List<FieldSchema> fields = client.get_fields(db, tableName);
+    List<FieldSchema> fields = client.get_fields(db, tableName, null);
     return fastpath ? fields : deepCopyFieldSchemas(fields);
   }
 
@@ -1846,7 +1847,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
          envCxt = new EnvironmentContext(props);
        }
 
-    List<FieldSchema> fields = client.get_schema_with_environment_context(db, tableName, envCxt);
+    List<FieldSchema> fields = client.get_schema_with_environment_context(db, tableName, envCxt, null);
     return fastpath ? fields : deepCopyFieldSchemas(fields);
   }
 
@@ -1859,7 +1860,7 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
   @Override
   public Partition getPartition(String db, String tableName, String partName)
       throws MetaException, TException, UnknownTableException, NoSuchObjectException {
-    Partition p = client.get_partition_by_name(db, tableName, partName);
+    Partition p = client.get_partition_by_name(db, tableName, partName, null);
     return fastpath ? p : deepCopy(filterHook.filterPartition(p));
   }
 
@@ -3668,5 +3669,10 @@ public class HiveMetaStoreClientPreCatalog implements IMetaStoreClient, AutoClos
   @Override
   public String getServerVersion() throws TException {
     return client.getVersion();
+  }
+
+  @Override
+  public void setValidWriteIdList(String txnWriteIdList) {
+    throw new UnsupportedOperationException();
   }
 }

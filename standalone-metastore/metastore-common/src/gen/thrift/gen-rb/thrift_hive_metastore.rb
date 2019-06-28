@@ -294,13 +294,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_type_all failed: unknown result')
     end
 
-    def get_fields(db_name, table_name)
-      send_get_fields(db_name, table_name)
+    def get_fields(db_name, table_name, validWriteIdList)
+      send_get_fields(db_name, table_name, validWriteIdList)
       return recv_get_fields()
     end
 
-    def send_get_fields(db_name, table_name)
-      send_message('get_fields', Get_fields_args, :db_name => db_name, :table_name => table_name)
+    def send_get_fields(db_name, table_name, validWriteIdList)
+      send_message('get_fields', Get_fields_args, :db_name => db_name, :table_name => table_name, :validWriteIdList => validWriteIdList)
     end
 
     def recv_get_fields()
@@ -312,13 +312,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_fields failed: unknown result')
     end
 
-    def get_fields_with_environment_context(db_name, table_name, environment_context)
-      send_get_fields_with_environment_context(db_name, table_name, environment_context)
+    def get_fields_with_environment_context(db_name, table_name, environment_context, validWriteIdList)
+      send_get_fields_with_environment_context(db_name, table_name, environment_context, validWriteIdList)
       return recv_get_fields_with_environment_context()
     end
 
-    def send_get_fields_with_environment_context(db_name, table_name, environment_context)
-      send_message('get_fields_with_environment_context', Get_fields_with_environment_context_args, :db_name => db_name, :table_name => table_name, :environment_context => environment_context)
+    def send_get_fields_with_environment_context(db_name, table_name, environment_context, validWriteIdList)
+      send_message('get_fields_with_environment_context', Get_fields_with_environment_context_args, :db_name => db_name, :table_name => table_name, :environment_context => environment_context, :validWriteIdList => validWriteIdList)
     end
 
     def recv_get_fields_with_environment_context()
@@ -330,13 +330,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_fields_with_environment_context failed: unknown result')
     end
 
-    def get_schema(db_name, table_name)
-      send_get_schema(db_name, table_name)
+    def get_schema(db_name, table_name, validWriteIdList)
+      send_get_schema(db_name, table_name, validWriteIdList)
       return recv_get_schema()
     end
 
-    def send_get_schema(db_name, table_name)
-      send_message('get_schema', Get_schema_args, :db_name => db_name, :table_name => table_name)
+    def send_get_schema(db_name, table_name, validWriteIdList)
+      send_message('get_schema', Get_schema_args, :db_name => db_name, :table_name => table_name, :validWriteIdList => validWriteIdList)
     end
 
     def recv_get_schema()
@@ -348,13 +348,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_schema failed: unknown result')
     end
 
-    def get_schema_with_environment_context(db_name, table_name, environment_context)
-      send_get_schema_with_environment_context(db_name, table_name, environment_context)
+    def get_schema_with_environment_context(db_name, table_name, environment_context, validWriteIdList)
+      send_get_schema_with_environment_context(db_name, table_name, environment_context, validWriteIdList)
       return recv_get_schema_with_environment_context()
     end
 
-    def send_get_schema_with_environment_context(db_name, table_name, environment_context)
-      send_message('get_schema_with_environment_context', Get_schema_with_environment_context_args, :db_name => db_name, :table_name => table_name, :environment_context => environment_context)
+    def send_get_schema_with_environment_context(db_name, table_name, environment_context, validWriteIdList)
+      send_message('get_schema_with_environment_context', Get_schema_with_environment_context_args, :db_name => db_name, :table_name => table_name, :environment_context => environment_context, :validWriteIdList => validWriteIdList)
     end
 
     def recv_get_schema_with_environment_context()
@@ -691,13 +691,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_all_tables failed: unknown result')
     end
 
-    def get_table(dbname, tbl_name)
-      send_get_table(dbname, tbl_name)
+    def get_table(dbname, tbl_name, validWriteIdList)
+      send_get_table(dbname, tbl_name, validWriteIdList)
       return recv_get_table()
     end
 
-    def send_get_table(dbname, tbl_name)
-      send_message('get_table', Get_table_args, :dbname => dbname, :tbl_name => tbl_name)
+    def send_get_table(dbname, tbl_name, validWriteIdList)
+      send_message('get_table', Get_table_args, :dbname => dbname, :tbl_name => tbl_name, :validWriteIdList => validWriteIdList)
     end
 
     def recv_get_table()
@@ -1139,13 +1139,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'drop_partitions_req failed: unknown result')
     end
 
-    def get_partition(db_name, tbl_name, part_vals)
-      send_get_partition(db_name, tbl_name, part_vals)
+    def get_partition(db_name, tbl_name, part_vals, validTxnList)
+      send_get_partition(db_name, tbl_name, part_vals, validTxnList)
       return recv_get_partition()
     end
 
-    def send_get_partition(db_name, tbl_name, part_vals)
-      send_message('get_partition', Get_partition_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals)
+    def send_get_partition(db_name, tbl_name, part_vals, validTxnList)
+      send_message('get_partition', Get_partition_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals, :validTxnList => validTxnList)
     end
 
     def recv_get_partition()
@@ -1194,13 +1194,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'exchange_partitions failed: unknown result')
     end
 
-    def get_partition_with_auth(db_name, tbl_name, part_vals, user_name, group_names)
-      send_get_partition_with_auth(db_name, tbl_name, part_vals, user_name, group_names)
+    def get_partition_with_auth(db_name, tbl_name, part_vals, user_name, group_names, validTxnList)
+      send_get_partition_with_auth(db_name, tbl_name, part_vals, user_name, group_names, validTxnList)
       return recv_get_partition_with_auth()
     end
 
-    def send_get_partition_with_auth(db_name, tbl_name, part_vals, user_name, group_names)
-      send_message('get_partition_with_auth', Get_partition_with_auth_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals, :user_name => user_name, :group_names => group_names)
+    def send_get_partition_with_auth(db_name, tbl_name, part_vals, user_name, group_names, validTxnList)
+      send_message('get_partition_with_auth', Get_partition_with_auth_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals, :user_name => user_name, :group_names => group_names, :validTxnList => validTxnList)
     end
 
     def recv_get_partition_with_auth()
@@ -1211,13 +1211,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partition_with_auth failed: unknown result')
     end
 
-    def get_partition_by_name(db_name, tbl_name, part_name)
-      send_get_partition_by_name(db_name, tbl_name, part_name)
+    def get_partition_by_name(db_name, tbl_name, part_name, validTxnList)
+      send_get_partition_by_name(db_name, tbl_name, part_name, validTxnList)
       return recv_get_partition_by_name()
     end
 
-    def send_get_partition_by_name(db_name, tbl_name, part_name)
-      send_message('get_partition_by_name', Get_partition_by_name_args, :db_name => db_name, :tbl_name => tbl_name, :part_name => part_name)
+    def send_get_partition_by_name(db_name, tbl_name, part_name, validTxnList)
+      send_message('get_partition_by_name', Get_partition_by_name_args, :db_name => db_name, :tbl_name => tbl_name, :part_name => part_name, :validTxnList => validTxnList)
     end
 
     def recv_get_partition_by_name()
@@ -1228,13 +1228,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partition_by_name failed: unknown result')
     end
 
-    def get_partitions(db_name, tbl_name, max_parts)
-      send_get_partitions(db_name, tbl_name, max_parts)
+    def get_partitions(db_name, tbl_name, max_parts, validTxnList)
+      send_get_partitions(db_name, tbl_name, max_parts, validTxnList)
       return recv_get_partitions()
     end
 
-    def send_get_partitions(db_name, tbl_name, max_parts)
-      send_message('get_partitions', Get_partitions_args, :db_name => db_name, :tbl_name => tbl_name, :max_parts => max_parts)
+    def send_get_partitions(db_name, tbl_name, max_parts, validTxnList)
+      send_message('get_partitions', Get_partitions_args, :db_name => db_name, :tbl_name => tbl_name, :max_parts => max_parts, :validTxnList => validTxnList)
     end
 
     def recv_get_partitions()
@@ -1245,13 +1245,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partitions failed: unknown result')
     end
 
-    def get_partitions_with_auth(db_name, tbl_name, max_parts, user_name, group_names)
-      send_get_partitions_with_auth(db_name, tbl_name, max_parts, user_name, group_names)
+    def get_partitions_with_auth(db_name, tbl_name, max_parts, user_name, group_names, validTxnList)
+      send_get_partitions_with_auth(db_name, tbl_name, max_parts, user_name, group_names, validTxnList)
       return recv_get_partitions_with_auth()
     end
 
-    def send_get_partitions_with_auth(db_name, tbl_name, max_parts, user_name, group_names)
-      send_message('get_partitions_with_auth', Get_partitions_with_auth_args, :db_name => db_name, :tbl_name => tbl_name, :max_parts => max_parts, :user_name => user_name, :group_names => group_names)
+    def send_get_partitions_with_auth(db_name, tbl_name, max_parts, user_name, group_names, validTxnList)
+      send_message('get_partitions_with_auth', Get_partitions_with_auth_args, :db_name => db_name, :tbl_name => tbl_name, :max_parts => max_parts, :user_name => user_name, :group_names => group_names, :validTxnList => validTxnList)
     end
 
     def recv_get_partitions_with_auth()
@@ -1262,13 +1262,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partitions_with_auth failed: unknown result')
     end
 
-    def get_partitions_pspec(db_name, tbl_name, max_parts)
-      send_get_partitions_pspec(db_name, tbl_name, max_parts)
+    def get_partitions_pspec(db_name, tbl_name, max_parts, validTxnList)
+      send_get_partitions_pspec(db_name, tbl_name, max_parts, validTxnList)
       return recv_get_partitions_pspec()
     end
 
-    def send_get_partitions_pspec(db_name, tbl_name, max_parts)
-      send_message('get_partitions_pspec', Get_partitions_pspec_args, :db_name => db_name, :tbl_name => tbl_name, :max_parts => max_parts)
+    def send_get_partitions_pspec(db_name, tbl_name, max_parts, validTxnList)
+      send_message('get_partitions_pspec', Get_partitions_pspec_args, :db_name => db_name, :tbl_name => tbl_name, :max_parts => max_parts, :validTxnList => validTxnList)
     end
 
     def recv_get_partitions_pspec()
@@ -1279,13 +1279,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partitions_pspec failed: unknown result')
     end
 
-    def get_partition_names(db_name, tbl_name, max_parts)
-      send_get_partition_names(db_name, tbl_name, max_parts)
+    def get_partition_names(db_name, tbl_name, max_parts, validTxnList)
+      send_get_partition_names(db_name, tbl_name, max_parts, validTxnList)
       return recv_get_partition_names()
     end
 
-    def send_get_partition_names(db_name, tbl_name, max_parts)
-      send_message('get_partition_names', Get_partition_names_args, :db_name => db_name, :tbl_name => tbl_name, :max_parts => max_parts)
+    def send_get_partition_names(db_name, tbl_name, max_parts, validTxnList)
+      send_message('get_partition_names', Get_partition_names_args, :db_name => db_name, :tbl_name => tbl_name, :max_parts => max_parts, :validTxnList => validTxnList)
     end
 
     def recv_get_partition_names()
@@ -1313,13 +1313,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partition_values failed: unknown result')
     end
 
-    def get_partitions_ps(db_name, tbl_name, part_vals, max_parts)
-      send_get_partitions_ps(db_name, tbl_name, part_vals, max_parts)
+    def get_partitions_ps(db_name, tbl_name, part_vals, max_parts, validTxnList)
+      send_get_partitions_ps(db_name, tbl_name, part_vals, max_parts, validTxnList)
       return recv_get_partitions_ps()
     end
 
-    def send_get_partitions_ps(db_name, tbl_name, part_vals, max_parts)
-      send_message('get_partitions_ps', Get_partitions_ps_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals, :max_parts => max_parts)
+    def send_get_partitions_ps(db_name, tbl_name, part_vals, max_parts, validTxnList)
+      send_message('get_partitions_ps', Get_partitions_ps_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals, :max_parts => max_parts, :validTxnList => validTxnList)
     end
 
     def recv_get_partitions_ps()
@@ -1330,13 +1330,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partitions_ps failed: unknown result')
     end
 
-    def get_partitions_ps_with_auth(db_name, tbl_name, part_vals, max_parts, user_name, group_names)
-      send_get_partitions_ps_with_auth(db_name, tbl_name, part_vals, max_parts, user_name, group_names)
+    def get_partitions_ps_with_auth(db_name, tbl_name, part_vals, max_parts, user_name, group_names, validTxnList)
+      send_get_partitions_ps_with_auth(db_name, tbl_name, part_vals, max_parts, user_name, group_names, validTxnList)
       return recv_get_partitions_ps_with_auth()
     end
 
-    def send_get_partitions_ps_with_auth(db_name, tbl_name, part_vals, max_parts, user_name, group_names)
-      send_message('get_partitions_ps_with_auth', Get_partitions_ps_with_auth_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals, :max_parts => max_parts, :user_name => user_name, :group_names => group_names)
+    def send_get_partitions_ps_with_auth(db_name, tbl_name, part_vals, max_parts, user_name, group_names, validTxnList)
+      send_message('get_partitions_ps_with_auth', Get_partitions_ps_with_auth_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals, :max_parts => max_parts, :user_name => user_name, :group_names => group_names, :validTxnList => validTxnList)
     end
 
     def recv_get_partitions_ps_with_auth()
@@ -1347,13 +1347,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partitions_ps_with_auth failed: unknown result')
     end
 
-    def get_partition_names_ps(db_name, tbl_name, part_vals, max_parts)
-      send_get_partition_names_ps(db_name, tbl_name, part_vals, max_parts)
+    def get_partition_names_ps(db_name, tbl_name, part_vals, max_parts, validTxnList)
+      send_get_partition_names_ps(db_name, tbl_name, part_vals, max_parts, validTxnList)
       return recv_get_partition_names_ps()
     end
 
-    def send_get_partition_names_ps(db_name, tbl_name, part_vals, max_parts)
-      send_message('get_partition_names_ps', Get_partition_names_ps_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals, :max_parts => max_parts)
+    def send_get_partition_names_ps(db_name, tbl_name, part_vals, max_parts, validTxnList)
+      send_message('get_partition_names_ps', Get_partition_names_ps_args, :db_name => db_name, :tbl_name => tbl_name, :part_vals => part_vals, :max_parts => max_parts, :validTxnList => validTxnList)
     end
 
     def recv_get_partition_names_ps()
@@ -1364,13 +1364,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partition_names_ps failed: unknown result')
     end
 
-    def get_partitions_by_filter(db_name, tbl_name, filter, max_parts)
-      send_get_partitions_by_filter(db_name, tbl_name, filter, max_parts)
+    def get_partitions_by_filter(db_name, tbl_name, filter, max_parts, validTxnList)
+      send_get_partitions_by_filter(db_name, tbl_name, filter, max_parts, validTxnList)
       return recv_get_partitions_by_filter()
     end
 
-    def send_get_partitions_by_filter(db_name, tbl_name, filter, max_parts)
-      send_message('get_partitions_by_filter', Get_partitions_by_filter_args, :db_name => db_name, :tbl_name => tbl_name, :filter => filter, :max_parts => max_parts)
+    def send_get_partitions_by_filter(db_name, tbl_name, filter, max_parts, validTxnList)
+      send_message('get_partitions_by_filter', Get_partitions_by_filter_args, :db_name => db_name, :tbl_name => tbl_name, :filter => filter, :max_parts => max_parts, :validTxnList => validTxnList)
     end
 
     def recv_get_partitions_by_filter()
@@ -1381,13 +1381,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partitions_by_filter failed: unknown result')
     end
 
-    def get_part_specs_by_filter(db_name, tbl_name, filter, max_parts)
-      send_get_part_specs_by_filter(db_name, tbl_name, filter, max_parts)
+    def get_part_specs_by_filter(db_name, tbl_name, filter, max_parts, validTxnList)
+      send_get_part_specs_by_filter(db_name, tbl_name, filter, max_parts, validTxnList)
       return recv_get_part_specs_by_filter()
     end
 
-    def send_get_part_specs_by_filter(db_name, tbl_name, filter, max_parts)
-      send_message('get_part_specs_by_filter', Get_part_specs_by_filter_args, :db_name => db_name, :tbl_name => tbl_name, :filter => filter, :max_parts => max_parts)
+    def send_get_part_specs_by_filter(db_name, tbl_name, filter, max_parts, validTxnList)
+      send_message('get_part_specs_by_filter', Get_part_specs_by_filter_args, :db_name => db_name, :tbl_name => tbl_name, :filter => filter, :max_parts => max_parts, :validTxnList => validTxnList)
     end
 
     def recv_get_part_specs_by_filter()
@@ -1415,13 +1415,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_partitions_by_expr failed: unknown result')
     end
 
-    def get_num_partitions_by_filter(db_name, tbl_name, filter)
-      send_get_num_partitions_by_filter(db_name, tbl_name, filter)
+    def get_num_partitions_by_filter(db_name, tbl_name, filter, validTxnList)
+      send_get_num_partitions_by_filter(db_name, tbl_name, filter, validTxnList)
       return recv_get_num_partitions_by_filter()
     end
 
-    def send_get_num_partitions_by_filter(db_name, tbl_name, filter)
-      send_message('get_num_partitions_by_filter', Get_num_partitions_by_filter_args, :db_name => db_name, :tbl_name => tbl_name, :filter => filter)
+    def send_get_num_partitions_by_filter(db_name, tbl_name, filter, validTxnList)
+      send_message('get_num_partitions_by_filter', Get_num_partitions_by_filter_args, :db_name => db_name, :tbl_name => tbl_name, :filter => filter, :validTxnList => validTxnList)
     end
 
     def recv_get_num_partitions_by_filter()
@@ -1432,13 +1432,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_num_partitions_by_filter failed: unknown result')
     end
 
-    def get_partitions_by_names(db_name, tbl_name, names)
-      send_get_partitions_by_names(db_name, tbl_name, names)
+    def get_partitions_by_names(db_name, tbl_name, names, validTxnList)
+      send_get_partitions_by_names(db_name, tbl_name, names, validTxnList)
       return recv_get_partitions_by_names()
     end
 
-    def send_get_partitions_by_names(db_name, tbl_name, names)
-      send_message('get_partitions_by_names', Get_partitions_by_names_args, :db_name => db_name, :tbl_name => tbl_name, :names => names)
+    def send_get_partitions_by_names(db_name, tbl_name, names, validTxnList)
+      send_message('get_partitions_by_names', Get_partitions_by_names_args, :db_name => db_name, :tbl_name => tbl_name, :names => names, :validTxnList => validTxnList)
     end
 
     def recv_get_partitions_by_names()
@@ -1863,13 +1863,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'update_partition_column_statistics_req failed: unknown result')
     end
 
-    def get_table_column_statistics(db_name, tbl_name, col_name)
-      send_get_table_column_statistics(db_name, tbl_name, col_name)
+    def get_table_column_statistics(db_name, tbl_name, col_name, validWriteIdList)
+      send_get_table_column_statistics(db_name, tbl_name, col_name, validWriteIdList)
       return recv_get_table_column_statistics()
     end
 
-    def send_get_table_column_statistics(db_name, tbl_name, col_name)
-      send_message('get_table_column_statistics', Get_table_column_statistics_args, :db_name => db_name, :tbl_name => tbl_name, :col_name => col_name)
+    def send_get_table_column_statistics(db_name, tbl_name, col_name, validWriteIdList)
+      send_message('get_table_column_statistics', Get_table_column_statistics_args, :db_name => db_name, :tbl_name => tbl_name, :col_name => col_name, :validWriteIdList => validWriteIdList)
     end
 
     def recv_get_table_column_statistics()
@@ -1882,13 +1882,13 @@ module ThriftHiveMetastore
       raise ::Thrift::ApplicationException.new(::Thrift::ApplicationException::MISSING_RESULT, 'get_table_column_statistics failed: unknown result')
     end
 
-    def get_partition_column_statistics(db_name, tbl_name, part_name, col_name)
-      send_get_partition_column_statistics(db_name, tbl_name, part_name, col_name)
+    def get_partition_column_statistics(db_name, tbl_name, part_name, col_name, validWriteIdList)
+      send_get_partition_column_statistics(db_name, tbl_name, part_name, col_name, validWriteIdList)
       return recv_get_partition_column_statistics()
     end
 
-    def send_get_partition_column_statistics(db_name, tbl_name, part_name, col_name)
-      send_message('get_partition_column_statistics', Get_partition_column_statistics_args, :db_name => db_name, :tbl_name => tbl_name, :part_name => part_name, :col_name => col_name)
+    def send_get_partition_column_statistics(db_name, tbl_name, part_name, col_name, validWriteIdList)
+      send_message('get_partition_column_statistics', Get_partition_column_statistics_args, :db_name => db_name, :tbl_name => tbl_name, :part_name => part_name, :col_name => col_name, :validWriteIdList => validWriteIdList)
     end
 
     def recv_get_partition_column_statistics()
@@ -3975,7 +3975,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_fields_args)
       result = Get_fields_result.new()
       begin
-        result.success = @handler.get_fields(args.db_name, args.table_name)
+        result.success = @handler.get_fields(args.db_name, args.table_name, args.validWriteIdList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::UnknownTableException => o2
@@ -3990,7 +3990,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_fields_with_environment_context_args)
       result = Get_fields_with_environment_context_result.new()
       begin
-        result.success = @handler.get_fields_with_environment_context(args.db_name, args.table_name, args.environment_context)
+        result.success = @handler.get_fields_with_environment_context(args.db_name, args.table_name, args.environment_context, args.validWriteIdList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::UnknownTableException => o2
@@ -4005,7 +4005,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_schema_args)
       result = Get_schema_result.new()
       begin
-        result.success = @handler.get_schema(args.db_name, args.table_name)
+        result.success = @handler.get_schema(args.db_name, args.table_name, args.validWriteIdList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::UnknownTableException => o2
@@ -4020,7 +4020,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_schema_with_environment_context_args)
       result = Get_schema_with_environment_context_result.new()
       begin
-        result.success = @handler.get_schema_with_environment_context(args.db_name, args.table_name, args.environment_context)
+        result.success = @handler.get_schema_with_environment_context(args.db_name, args.table_name, args.environment_context, args.validWriteIdList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::UnknownTableException => o2
@@ -4291,7 +4291,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_table_args)
       result = Get_table_result.new()
       begin
-        result.success = @handler.get_table(args.dbname, args.tbl_name)
+        result.success = @handler.get_table(args.dbname, args.tbl_name, args.validWriteIdList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -4647,7 +4647,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partition_args)
       result = Get_partition_result.new()
       begin
-        result.success = @handler.get_partition(args.db_name, args.tbl_name, args.part_vals)
+        result.success = @handler.get_partition(args.db_name, args.tbl_name, args.part_vals, args.validTxnList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -4694,7 +4694,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partition_with_auth_args)
       result = Get_partition_with_auth_result.new()
       begin
-        result.success = @handler.get_partition_with_auth(args.db_name, args.tbl_name, args.part_vals, args.user_name, args.group_names)
+        result.success = @handler.get_partition_with_auth(args.db_name, args.tbl_name, args.part_vals, args.user_name, args.group_names, args.validTxnList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -4707,7 +4707,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partition_by_name_args)
       result = Get_partition_by_name_result.new()
       begin
-        result.success = @handler.get_partition_by_name(args.db_name, args.tbl_name, args.part_name)
+        result.success = @handler.get_partition_by_name(args.db_name, args.tbl_name, args.part_name, args.validTxnList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -4720,7 +4720,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partitions_args)
       result = Get_partitions_result.new()
       begin
-        result.success = @handler.get_partitions(args.db_name, args.tbl_name, args.max_parts)
+        result.success = @handler.get_partitions(args.db_name, args.tbl_name, args.max_parts, args.validTxnList)
       rescue ::NoSuchObjectException => o1
         result.o1 = o1
       rescue ::MetaException => o2
@@ -4733,7 +4733,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partitions_with_auth_args)
       result = Get_partitions_with_auth_result.new()
       begin
-        result.success = @handler.get_partitions_with_auth(args.db_name, args.tbl_name, args.max_parts, args.user_name, args.group_names)
+        result.success = @handler.get_partitions_with_auth(args.db_name, args.tbl_name, args.max_parts, args.user_name, args.group_names, args.validTxnList)
       rescue ::NoSuchObjectException => o1
         result.o1 = o1
       rescue ::MetaException => o2
@@ -4746,7 +4746,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partitions_pspec_args)
       result = Get_partitions_pspec_result.new()
       begin
-        result.success = @handler.get_partitions_pspec(args.db_name, args.tbl_name, args.max_parts)
+        result.success = @handler.get_partitions_pspec(args.db_name, args.tbl_name, args.max_parts, args.validTxnList)
       rescue ::NoSuchObjectException => o1
         result.o1 = o1
       rescue ::MetaException => o2
@@ -4759,7 +4759,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partition_names_args)
       result = Get_partition_names_result.new()
       begin
-        result.success = @handler.get_partition_names(args.db_name, args.tbl_name, args.max_parts)
+        result.success = @handler.get_partition_names(args.db_name, args.tbl_name, args.max_parts, args.validTxnList)
       rescue ::NoSuchObjectException => o1
         result.o1 = o1
       rescue ::MetaException => o2
@@ -4785,7 +4785,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partitions_ps_args)
       result = Get_partitions_ps_result.new()
       begin
-        result.success = @handler.get_partitions_ps(args.db_name, args.tbl_name, args.part_vals, args.max_parts)
+        result.success = @handler.get_partitions_ps(args.db_name, args.tbl_name, args.part_vals, args.max_parts, args.validTxnList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -4798,7 +4798,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partitions_ps_with_auth_args)
       result = Get_partitions_ps_with_auth_result.new()
       begin
-        result.success = @handler.get_partitions_ps_with_auth(args.db_name, args.tbl_name, args.part_vals, args.max_parts, args.user_name, args.group_names)
+        result.success = @handler.get_partitions_ps_with_auth(args.db_name, args.tbl_name, args.part_vals, args.max_parts, args.user_name, args.group_names, args.validTxnList)
       rescue ::NoSuchObjectException => o1
         result.o1 = o1
       rescue ::MetaException => o2
@@ -4811,7 +4811,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partition_names_ps_args)
       result = Get_partition_names_ps_result.new()
       begin
-        result.success = @handler.get_partition_names_ps(args.db_name, args.tbl_name, args.part_vals, args.max_parts)
+        result.success = @handler.get_partition_names_ps(args.db_name, args.tbl_name, args.part_vals, args.max_parts, args.validTxnList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -4824,7 +4824,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partitions_by_filter_args)
       result = Get_partitions_by_filter_result.new()
       begin
-        result.success = @handler.get_partitions_by_filter(args.db_name, args.tbl_name, args.filter, args.max_parts)
+        result.success = @handler.get_partitions_by_filter(args.db_name, args.tbl_name, args.filter, args.max_parts, args.validTxnList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -4837,7 +4837,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_part_specs_by_filter_args)
       result = Get_part_specs_by_filter_result.new()
       begin
-        result.success = @handler.get_part_specs_by_filter(args.db_name, args.tbl_name, args.filter, args.max_parts)
+        result.success = @handler.get_part_specs_by_filter(args.db_name, args.tbl_name, args.filter, args.max_parts, args.validTxnList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -4863,7 +4863,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_num_partitions_by_filter_args)
       result = Get_num_partitions_by_filter_result.new()
       begin
-        result.success = @handler.get_num_partitions_by_filter(args.db_name, args.tbl_name, args.filter)
+        result.success = @handler.get_num_partitions_by_filter(args.db_name, args.tbl_name, args.filter, args.validTxnList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -4876,7 +4876,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partitions_by_names_args)
       result = Get_partitions_by_names_result.new()
       begin
-        result.success = @handler.get_partitions_by_names(args.db_name, args.tbl_name, args.names)
+        result.success = @handler.get_partitions_by_names(args.db_name, args.tbl_name, args.names, args.validTxnList)
       rescue ::MetaException => o1
         result.o1 = o1
       rescue ::NoSuchObjectException => o2
@@ -5225,7 +5225,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_table_column_statistics_args)
       result = Get_table_column_statistics_result.new()
       begin
-        result.success = @handler.get_table_column_statistics(args.db_name, args.tbl_name, args.col_name)
+        result.success = @handler.get_table_column_statistics(args.db_name, args.tbl_name, args.col_name, args.validWriteIdList)
       rescue ::NoSuchObjectException => o1
         result.o1 = o1
       rescue ::MetaException => o2
@@ -5242,7 +5242,7 @@ module ThriftHiveMetastore
       args = read_args(iprot, Get_partition_column_statistics_args)
       result = Get_partition_column_statistics_result.new()
       begin
-        result.success = @handler.get_partition_column_statistics(args.db_name, args.tbl_name, args.part_name, args.col_name)
+        result.success = @handler.get_partition_column_statistics(args.db_name, args.tbl_name, args.part_name, args.col_name, args.validWriteIdList)
       rescue ::NoSuchObjectException => o1
         result.o1 = o1
       rescue ::MetaException => o2
@@ -7155,10 +7155,12 @@ module ThriftHiveMetastore
     include ::Thrift::Struct, ::Thrift::Struct_Union
     DB_NAME = 1
     TABLE_NAME = 2
+    VALIDWRITEIDLIST = 3
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
-      TABLE_NAME => {:type => ::Thrift::Types::STRING, :name => 'table_name'}
+      TABLE_NAME => {:type => ::Thrift::Types::STRING, :name => 'table_name'},
+      VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList'}
     }
 
     def struct_fields; FIELDS; end
@@ -7196,11 +7198,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TABLE_NAME = 2
     ENVIRONMENT_CONTEXT = 3
+    VALIDWRITEIDLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TABLE_NAME => {:type => ::Thrift::Types::STRING, :name => 'table_name'},
-      ENVIRONMENT_CONTEXT => {:type => ::Thrift::Types::STRUCT, :name => 'environment_context', :class => ::EnvironmentContext}
+      ENVIRONMENT_CONTEXT => {:type => ::Thrift::Types::STRUCT, :name => 'environment_context', :class => ::EnvironmentContext},
+      VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList'}
     }
 
     def struct_fields; FIELDS; end
@@ -7237,10 +7241,12 @@ module ThriftHiveMetastore
     include ::Thrift::Struct, ::Thrift::Struct_Union
     DB_NAME = 1
     TABLE_NAME = 2
+    VALIDWRITEIDLIST = 3
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
-      TABLE_NAME => {:type => ::Thrift::Types::STRING, :name => 'table_name'}
+      TABLE_NAME => {:type => ::Thrift::Types::STRING, :name => 'table_name'},
+      VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList'}
     }
 
     def struct_fields; FIELDS; end
@@ -7278,11 +7284,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TABLE_NAME = 2
     ENVIRONMENT_CONTEXT = 3
+    VALIDWRITEIDLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TABLE_NAME => {:type => ::Thrift::Types::STRING, :name => 'table_name'},
-      ENVIRONMENT_CONTEXT => {:type => ::Thrift::Types::STRUCT, :name => 'environment_context', :class => ::EnvironmentContext}
+      ENVIRONMENT_CONTEXT => {:type => ::Thrift::Types::STRUCT, :name => 'environment_context', :class => ::EnvironmentContext},
+      VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList'}
     }
 
     def struct_fields; FIELDS; end
@@ -8046,10 +8054,12 @@ module ThriftHiveMetastore
     include ::Thrift::Struct, ::Thrift::Struct_Union
     DBNAME = 1
     TBL_NAME = 2
+    VALIDWRITEIDLIST = 3
 
     FIELDS = {
       DBNAME => {:type => ::Thrift::Types::STRING, :name => 'dbname'},
-      TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'}
+      TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
+      VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9077,11 +9087,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TBL_NAME = 2
     PART_VALS = 3
+    VALIDTXNLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
-      PART_VALS => {:type => ::Thrift::Types::LIST, :name => 'part_vals', :element => {:type => ::Thrift::Types::STRING}}
+      PART_VALS => {:type => ::Thrift::Types::LIST, :name => 'part_vals', :element => {:type => ::Thrift::Types::STRING}},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9215,13 +9227,15 @@ module ThriftHiveMetastore
     PART_VALS = 3
     USER_NAME = 4
     GROUP_NAMES = 5
+    VALIDTXNLIST = 6
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
       PART_VALS => {:type => ::Thrift::Types::LIST, :name => 'part_vals', :element => {:type => ::Thrift::Types::STRING}},
       USER_NAME => {:type => ::Thrift::Types::STRING, :name => 'user_name'},
-      GROUP_NAMES => {:type => ::Thrift::Types::LIST, :name => 'group_names', :element => {:type => ::Thrift::Types::STRING}}
+      GROUP_NAMES => {:type => ::Thrift::Types::LIST, :name => 'group_names', :element => {:type => ::Thrift::Types::STRING}},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9257,11 +9271,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TBL_NAME = 2
     PART_NAME = 3
+    VALIDTXNLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
-      PART_NAME => {:type => ::Thrift::Types::STRING, :name => 'part_name'}
+      PART_NAME => {:type => ::Thrift::Types::STRING, :name => 'part_name'},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9297,11 +9313,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TBL_NAME = 2
     MAX_PARTS = 3
+    VALIDTXNLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
-      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1}
+      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9339,13 +9357,15 @@ module ThriftHiveMetastore
     MAX_PARTS = 3
     USER_NAME = 4
     GROUP_NAMES = 5
+    VALIDTXNLIST = 6
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
       MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1},
       USER_NAME => {:type => ::Thrift::Types::STRING, :name => 'user_name'},
-      GROUP_NAMES => {:type => ::Thrift::Types::LIST, :name => 'group_names', :element => {:type => ::Thrift::Types::STRING}}
+      GROUP_NAMES => {:type => ::Thrift::Types::LIST, :name => 'group_names', :element => {:type => ::Thrift::Types::STRING}},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9381,11 +9401,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TBL_NAME = 2
     MAX_PARTS = 3
+    VALIDTXNLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
-      MAX_PARTS => {:type => ::Thrift::Types::I32, :name => 'max_parts', :default => -1}
+      MAX_PARTS => {:type => ::Thrift::Types::I32, :name => 'max_parts', :default => -1},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9421,11 +9443,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TBL_NAME = 2
     MAX_PARTS = 3
+    VALIDTXNLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
-      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1}
+      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9498,12 +9522,14 @@ module ThriftHiveMetastore
     TBL_NAME = 2
     PART_VALS = 3
     MAX_PARTS = 4
+    VALIDTXNLIST = 5
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
       PART_VALS => {:type => ::Thrift::Types::LIST, :name => 'part_vals', :element => {:type => ::Thrift::Types::STRING}},
-      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1}
+      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9542,6 +9568,7 @@ module ThriftHiveMetastore
     MAX_PARTS = 4
     USER_NAME = 5
     GROUP_NAMES = 6
+    VALIDTXNLIST = 7
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
@@ -9549,7 +9576,8 @@ module ThriftHiveMetastore
       PART_VALS => {:type => ::Thrift::Types::LIST, :name => 'part_vals', :element => {:type => ::Thrift::Types::STRING}},
       MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1},
       USER_NAME => {:type => ::Thrift::Types::STRING, :name => 'user_name'},
-      GROUP_NAMES => {:type => ::Thrift::Types::LIST, :name => 'group_names', :element => {:type => ::Thrift::Types::STRING}}
+      GROUP_NAMES => {:type => ::Thrift::Types::LIST, :name => 'group_names', :element => {:type => ::Thrift::Types::STRING}},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9586,12 +9614,14 @@ module ThriftHiveMetastore
     TBL_NAME = 2
     PART_VALS = 3
     MAX_PARTS = 4
+    VALIDTXNLIST = 5
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
       PART_VALS => {:type => ::Thrift::Types::LIST, :name => 'part_vals', :element => {:type => ::Thrift::Types::STRING}},
-      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1}
+      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9628,12 +9658,14 @@ module ThriftHiveMetastore
     TBL_NAME = 2
     FILTER = 3
     MAX_PARTS = 4
+    VALIDTXNLIST = 5
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
       FILTER => {:type => ::Thrift::Types::STRING, :name => 'filter'},
-      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1}
+      MAX_PARTS => {:type => ::Thrift::Types::I16, :name => 'max_parts', :default => -1},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9670,12 +9702,14 @@ module ThriftHiveMetastore
     TBL_NAME = 2
     FILTER = 3
     MAX_PARTS = 4
+    VALIDTXNLIST = 5
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
       FILTER => {:type => ::Thrift::Types::STRING, :name => 'filter'},
-      MAX_PARTS => {:type => ::Thrift::Types::I32, :name => 'max_parts', :default => -1}
+      MAX_PARTS => {:type => ::Thrift::Types::I32, :name => 'max_parts', :default => -1},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9747,11 +9781,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TBL_NAME = 2
     FILTER = 3
+    VALIDTXNLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
-      FILTER => {:type => ::Thrift::Types::STRING, :name => 'filter'}
+      FILTER => {:type => ::Thrift::Types::STRING, :name => 'filter'},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -9787,11 +9823,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TBL_NAME = 2
     NAMES = 3
+    VALIDTXNLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
-      NAMES => {:type => ::Thrift::Types::LIST, :name => 'names', :element => {:type => ::Thrift::Types::STRING}}
+      NAMES => {:type => ::Thrift::Types::LIST, :name => 'names', :element => {:type => ::Thrift::Types::STRING}},
+      VALIDTXNLIST => {:type => ::Thrift::Types::STRING, :name => 'validTxnList'}
     }
 
     def struct_fields; FIELDS; end
@@ -10751,11 +10789,13 @@ module ThriftHiveMetastore
     DB_NAME = 1
     TBL_NAME = 2
     COL_NAME = 3
+    VALIDWRITEIDLIST = 4
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
-      COL_NAME => {:type => ::Thrift::Types::STRING, :name => 'col_name'}
+      COL_NAME => {:type => ::Thrift::Types::STRING, :name => 'col_name'},
+      VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList'}
     }
 
     def struct_fields; FIELDS; end
@@ -10796,12 +10836,14 @@ module ThriftHiveMetastore
     TBL_NAME = 2
     PART_NAME = 3
     COL_NAME = 4
+    VALIDWRITEIDLIST = 5
 
     FIELDS = {
       DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
       TBL_NAME => {:type => ::Thrift::Types::STRING, :name => 'tbl_name'},
       PART_NAME => {:type => ::Thrift::Types::STRING, :name => 'part_name'},
-      COL_NAME => {:type => ::Thrift::Types::STRING, :name => 'col_name'}
+      COL_NAME => {:type => ::Thrift::Types::STRING, :name => 'col_name'},
+      VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList'}
     }
 
     def struct_fields; FIELDS; end

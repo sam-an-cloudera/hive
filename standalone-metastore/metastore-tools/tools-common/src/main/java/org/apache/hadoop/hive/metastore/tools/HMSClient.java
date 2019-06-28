@@ -153,8 +153,8 @@ final class HMSClient implements AutoCloseable {
     return getAllDatabases(dbName).contains(dbName);
   }
 
-  boolean tableExists(@NotNull String dbName, @NotNull String tableName) throws TException {
-    return getAllTables(dbName, tableName).contains(tableName);
+  boolean tableExists(@NotNull String dbName, @NotNull String tableName, @Nullable String validWriteIdList) throws TException {
+    return getAllTables(dbName, tableName, validWriteIdList).contains(tableName);
   }
 
   Database getDatabase(@NotNull String dbName) throws TException {
@@ -178,7 +178,7 @@ final class HMSClient implements AutoCloseable {
         .collect(Collectors.toSet());
   }
 
-  Set<String> getAllTables(@NotNull String dbName, @Nullable String filter) throws TException {
+  Set<String> getAllTables(@NotNull String dbName, @Nullable String filter, @Nullable String validWriteIdList) throws TException {
     if (filter == null || filter.isEmpty()) {
       return new HashSet<>(client.get_all_tables(dbName));
     }
@@ -236,8 +236,8 @@ final class HMSClient implements AutoCloseable {
     return true;
   }
 
-  Table getTable(@NotNull String dbName, @NotNull String tableName) throws TException {
-    return client.get_table(dbName, tableName);
+  Table getTable(@NotNull String dbName, @NotNull String tableName, @Nullable String validWriteIdList) throws TException {
+    return client.get_table(dbName, tableName, validWriteIdList);
   }
 
   Partition createPartition(@NotNull Table table, @NotNull List<String> values) throws TException {
@@ -254,8 +254,8 @@ final class HMSClient implements AutoCloseable {
 
 
   List<Partition> listPartitions(@NotNull String dbName,
-                                 @NotNull String tableName) throws TException {
-    return client.get_partitions(dbName, tableName, (short) -1);
+                                 @NotNull String tableName, @Nullable String validWriteIdList) throws TException {
+    return client.get_partitions(dbName, tableName, (short) -1, validWriteIdList);
   }
 
   Long getCurrentNotificationId() throws TException {
@@ -263,8 +263,8 @@ final class HMSClient implements AutoCloseable {
   }
 
   List<String> getPartitionNames(@NotNull String dbName,
-                                 @NotNull String tableName) throws TException {
-    return client.get_partition_names(dbName, tableName, (short) -1);
+                                 @NotNull String tableName, @Nullable String validWriteIdList) throws TException {
+    return client.get_partition_names(dbName, tableName, (short) -1, validWriteIdList);
   }
 
   public boolean dropPartition(@NotNull String dbName, @NotNull String tableName,
@@ -273,14 +273,14 @@ final class HMSClient implements AutoCloseable {
     return client.drop_partition(dbName, tableName, arguments, true);
   }
 
-  List<Partition> getPartitions(@NotNull String dbName, @NotNull String tableName) throws TException {
-    return client.get_partitions(dbName, tableName, (short) -1);
+  List<Partition> getPartitions(@NotNull String dbName, @NotNull String tableName, @Nullable String validWriteIdList) throws TException {
+    return client.get_partitions(dbName, tableName, (short) -1, validWriteIdList);
   }
 
   DropPartitionsResult dropPartitions(@NotNull String dbName, @NotNull String tableName,
                                       @Nullable List<String> partNames) throws TException {
     if (partNames == null) {
-      return dropPartitions(dbName, tableName, getPartitionNames(dbName, tableName));
+      return dropPartitions(dbName, tableName, getPartitionNames(dbName, tableName, null));
     }
     if (partNames.isEmpty()) {
       return null;
@@ -290,12 +290,12 @@ final class HMSClient implements AutoCloseable {
   }
 
   List<Partition> getPartitionsByNames(@NotNull String dbName, @NotNull String tableName,
-                                       @Nullable List<String> names) throws TException {
+                                       @Nullable List<String> names, @Nullable String validWriteIdList) throws TException {
     if (names == null) {
       return client.get_partitions_by_names(dbName, tableName,
-          getPartitionNames(dbName, tableName));
+          getPartitionNames(dbName, tableName, validWriteIdList), validWriteIdList);
     }
-    return client.get_partitions_by_names(dbName, tableName, names);
+    return client.get_partitions_by_names(dbName, tableName, names, validWriteIdList);
   }
 
   boolean alterTable(@NotNull String dbName, @NotNull String tableName, @NotNull Table newTable)

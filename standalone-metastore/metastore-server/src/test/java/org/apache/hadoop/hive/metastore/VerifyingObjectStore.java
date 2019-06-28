@@ -52,7 +52,7 @@ public class VerifyingObjectStore extends ObjectStore {
 
   @Override
   public List<Partition> getPartitionsByFilter(String catName, String dbName, String tblName,
-                                               String filter, short maxParts)
+                                               String filter, short maxParts, String validWriteIdList)
       throws MetaException, NoSuchObjectException {
     List<Partition> sqlResults = getPartitionsByFilterInternal(
         catName, dbName, tblName, filter, maxParts, true, false);
@@ -64,7 +64,7 @@ public class VerifyingObjectStore extends ObjectStore {
 
   @Override
   public List<Partition> getPartitionsByNames(String catName, String dbName, String tblName,
-      List<String> partNames) throws MetaException, NoSuchObjectException {
+      List<String> partNames, String validWriteIdList) throws MetaException, NoSuchObjectException {
     List<Partition> sqlResults = getPartitionsByNamesInternal(
         catName, dbName, tblName, partNames, true, false);
     List<Partition> ormResults = getPartitionsByNamesInternal(
@@ -75,7 +75,7 @@ public class VerifyingObjectStore extends ObjectStore {
 
   @Override
   public boolean getPartitionsByExpr(String catName, String dbName, String tblName, byte[] expr,
-      String defaultPartitionName, short maxParts, List<Partition> result) throws TException {
+      String defaultPartitionName, short maxParts, List<Partition> result, String validWriteIdList) throws TException {
     List<Partition> ormParts = new LinkedList<>();
     boolean sqlResult = getPartitionsByExprInternal(
         catName, dbName, tblName, expr, defaultPartitionName, maxParts, result, true, false);
@@ -92,7 +92,7 @@ public class VerifyingObjectStore extends ObjectStore {
 
   @Override
   public List<Partition> getPartitions(
-      String catName, String dbName, String tableName, int maxParts) throws MetaException, NoSuchObjectException {
+      String catName, String dbName, String tableName, int maxParts, String validWriteIdList) throws MetaException, NoSuchObjectException {
     List<Partition> sqlResults = getPartitionsInternal(catName, dbName, tableName, maxParts, true, false);
     List<Partition> ormResults = getPartitionsInternal(catName, dbName, tableName, maxParts, false, true);
     verifyLists(sqlResults, ormResults, Partition.class);
@@ -101,7 +101,7 @@ public class VerifyingObjectStore extends ObjectStore {
 
   @Override
   public ColumnStatistics getTableColumnStatistics(String catName, String dbName,
-      String tableName, List<String> colNames) throws MetaException, NoSuchObjectException {
+      String tableName, List<String> colNames, String validWriteIdList) throws MetaException, NoSuchObjectException {
     ColumnStatistics sqlResult = getTableColumnStatisticsInternal(
         catName, dbName, tableName, colNames, true, false);
     ColumnStatistics jdoResult = getTableColumnStatisticsInternal(
@@ -112,7 +112,7 @@ public class VerifyingObjectStore extends ObjectStore {
 
   @Override
   public List<ColumnStatistics> getPartitionColumnStatistics(String catName, String dbName,
-      String tableName, List<String> partNames, List<String> colNames)
+      String tableName, List<String> partNames, List<String> colNames, String validWriteIdList)
       throws MetaException, NoSuchObjectException {
     List<ColumnStatistics> sqlResult = getPartitionColumnStatisticsInternal(
         catName, dbName, tableName, partNames, colNames, true, false);

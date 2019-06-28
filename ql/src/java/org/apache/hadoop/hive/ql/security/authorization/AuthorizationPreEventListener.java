@@ -467,7 +467,7 @@ public class AuthorizationPreEventListener extends MetaStorePreEventListener {
       String catName = mapiPart.isSetCatName() ? mapiPart.getCatName() :
           MetaStoreUtils.getDefaultCatalog(context.getHandler().getConf());
       org.apache.hadoop.hive.metastore.api.Table t = context.getHandler().get_table_core(
-          catName, mapiPart.getDbName(), mapiPart.getTableName());
+          catName, mapiPart.getDbName(), mapiPart.getTableName(), null);
       if (wrapperApiPart.getSd() == null){
         // In the cases of create partition, by the time this event fires, the partition
         // object has not yet come into existence, and thus will not yet have a

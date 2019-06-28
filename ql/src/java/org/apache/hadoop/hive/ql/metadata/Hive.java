@@ -720,6 +720,10 @@ public class Hive {
                                                                   replWriteId);
           tableSnapshot = new TableSnapshot(replWriteId, writeIds.writeToString());
         } else {
+          if (AcidUtils.isTransactionalTable(newTbl)) {
+            // Advance writeId for ddl on transactional table
+            AcidUtils.advanceWriteId(conf, newTbl);
+          }
           // Make sure we pass in the names, so we can get the correct snapshot for rename table.
           tableSnapshot = AcidUtils.getTableSnapshot(conf, newTbl, dbName, tblName, true);
         }
@@ -802,6 +806,12 @@ public class Hive {
       if (environmentContext == null) {
         environmentContext = new EnvironmentContext();
       }
+
+      if (AcidUtils.isTransactionalTable(newPart.getTable())) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, newPart.getTable());
+      }
+
       AcidUtils.TableSnapshot tableSnapshot = null;
       if (transactional) {
         tableSnapshot = AcidUtils.getTableSnapshot(conf, newPart.getTable(), true);
@@ -850,6 +860,10 @@ public class Hive {
     List<org.apache.hadoop.hive.metastore.api.Partition> newTParts =
       new ArrayList<org.apache.hadoop.hive.metastore.api.Partition>();
     try {
+      if (AcidUtils.isTransactionalTable(newParts.get(0).getTable())) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, newParts.get(0).getTable());
+      }
       AcidUtils.TableSnapshot tableSnapshot = null;
       if (transactional) {
         tableSnapshot = AcidUtils.getTableSnapshot(conf, newParts.get(0).getTable(), true);
@@ -922,6 +936,10 @@ public class Hive {
                   tbl.getTableName()), new long[0], new BitSet(), replWriteId);
           tableSnapshot = new TableSnapshot(replWriteId, writeIds.writeToString());
         } else {
+          if (AcidUtils.isTransactionalTable(tbl)) {
+            // Advance writeId for ddl on transactional table
+            AcidUtils.advanceWriteId(conf, tbl);
+          }
           // Set table snapshot to api.Table to make it persistent.
           tableSnapshot = AcidUtils.getTableSnapshot(conf, tbl, true);
         }
@@ -1023,6 +1041,10 @@ public class Hive {
           principalPrivs.setRolePrivileges(grants.getRoleGrants());
           tTbl.setPrivileges(principalPrivs);
         }
+      }
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
       }
       // Set table snapshot to api.Table to make it persistent. A transactional table being
       // replicated may have a valid write Id copied from the source. Use that instead of
@@ -1144,6 +1166,15 @@ public class Hive {
   public void dropTable(String dbName, String tableName, boolean deleteData,
       boolean ignoreUnknownTab, boolean ifPurge) throws HiveException {
     try {
+      Table tbl = null;
+      try {
+        tbl = getTable(dbName, tableName);
+      } catch (InvalidTableException e) {
+      }
+      if (tbl != null && AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().dropTable(dbName, tableName, deleteData, ignoreUnknownTab, ifPurge);
     } catch (NoSuchObjectException e) {
       if (!ignoreUnknownTab) {
@@ -1173,11 +1204,15 @@ public class Hive {
   public void truncateTable(String dbDotTableName, Map<String, String> partSpec, Long writeId) throws HiveException {
     try {
       Table table = getTable(dbDotTableName, true);
+
       AcidUtils.TableSnapshot snapshot = null;
       if (AcidUtils.isTransactionalTable(table)) {
         if (writeId <= 0) {
           snapshot = AcidUtils.getTableSnapshot(conf, table, true);
         } else {
+          // Advance writeId for ddl on transactional table
+          AcidUtils.advanceWriteId(conf, table);
+
           String fullTableName = getFullTableName(table.getDbName(), table.getTableName());
           ValidWriteIdList writeIdList = getMSC().getValidWriteIds(fullTableName, writeId);
           snapshot = new TableSnapshot(writeId, writeIdList.writeToString());
@@ -2002,6 +2037,10 @@ public class Hive {
             inheritLocation, isSkewedStoreAsSubdir, isSrcLocal, isAcidIUDoperation,
             resetStatistics, writeId, stmtId, isInsertOverwrite, isTxnTable, newFiles);
 
+    if (AcidUtils.isTransactionalTable(tbl)) {
+      // Advance writeId for ddl on transactional table
+      AcidUtils.advanceWriteId(conf, tbl);
+    }
     AcidUtils.TableSnapshot tableSnapshot = isTxnTable ? getTableSnapshot(tbl, writeId) : null;
     if (tableSnapshot != null) {
       newTPart.getTPartition().setWriteId(tableSnapshot.getWriteId());
@@ -2692,6 +2731,10 @@ private void constructOneLBLocationMap(FileStatus fSta,
     }
 
     boolean isTxnTable = AcidUtils.isTransactionalTable(tbl);
+    if (isTxnTable) {
+      // Advance writeId for ddl on transactional table
+      AcidUtils.advanceWriteId(conf, tbl);
+    }
     AcidUtils.TableSnapshot tableSnapshot = isTxnTable ? getTableSnapshot(tbl, writeId) : null;
 
     for (Entry<Path, PartitionDetails> entry : partitionDetailsMap.entrySet()) {
@@ -2990,6 +3033,10 @@ private void constructOneLBLocationMap(FileStatus fSta,
     try {
       org.apache.hadoop.hive.metastore.api.Partition part =
           Partition.createMetaPartitionObject(tbl, partSpec, null);
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       AcidUtils.TableSnapshot tableSnapshot = AcidUtils.getTableSnapshot(conf, tbl);
       part.setWriteId(tableSnapshot != null ? tableSnapshot.getWriteId() : 0);
       return new Partition(tbl, getMSC().add_partition(part));
@@ -3021,6 +3068,10 @@ private void constructOneLBLocationMap(FileStatus fSta,
                                                                           tbl.getTableName()),
                                                     new long[0], new BitSet(), writeId).writeToString();
     } else {
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       AcidUtils.TableSnapshot tableSnapshot = AcidUtils.getTableSnapshot(conf, tbl, true);
       if (tableSnapshot != null && tableSnapshot.getWriteId() > 0) {
         writeId = tableSnapshot.getWriteId();
@@ -3429,6 +3480,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public boolean dropPartition(String dbName, String tableName, List<String> partVals, PartitionDropOptions options)
       throws HiveException {
     try {
+      Table tbl = getTable(dbName, tableName);
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       return getMSC().dropPartition(dbName, tableName, partVals, options);
     } catch (NoSuchObjectException e) {
       throw new HiveException("Partition or table doesn't exist.", e);
@@ -3538,6 +3594,10 @@ private void constructOneLBLocationMap(FileStatus fSta,
       throws HiveException {
     try {
       Table tbl = getTable(dbName, tblName);
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       List<org.apache.hadoop.hive.metastore.utils.ObjectPair<Integer, byte[]>> partExprs =
           new ArrayList<>(partSpecs.size());
       for (AlterTableDropPartitionDesc.PartitionDesc partSpec : partSpecs) {
@@ -4982,6 +5042,16 @@ private void constructOneLBLocationMap(FileStatus fSta,
       String sourceDb, String sourceTable, String destDb,
       String destinationTableName) throws HiveException {
     try {
+      Table srcTbl = getTable(sourceDb, sourceTable);
+      if (AcidUtils.isTransactionalTable(srcTbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, srcTbl);
+      }
+      Table descTbl = getTable(destDb, destinationTableName);
+      if (AcidUtils.isTransactionalTable(descTbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, descTbl);
+      }
       List<org.apache.hadoop.hive.metastore.api.Partition> partitions =
         getMSC().exchange_partitions(partitionSpecs, sourceDb, sourceTable, destDb,
         destinationTableName);
@@ -5217,6 +5287,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public boolean deleteTableColumnStatistics(String dbName, String tableName, String colName)
     throws HiveException {
     try {
+      Table tbl = getTable(dbName, tableName);
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       return getMSC().deleteTableColumnStatistics(dbName, tableName, colName);
     } catch(Exception e) {
       LOG.debug(StringUtils.stringifyException(e));
@@ -5227,6 +5302,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public boolean deletePartitionColumnStatistics(String dbName, String tableName, String partName,
     String colName) throws HiveException {
       try {
+        Table tbl = getTable(dbName, tableName);
+        if (AcidUtils.isTransactionalTable(tbl)) {
+          // Advance writeId for ddl on transactional table
+          AcidUtils.advanceWriteId(conf, tbl);
+        }
         return getMSC().deletePartitionColumnStatistics(dbName, tableName, partName, colName);
       } catch(Exception e) {
         LOG.debug(StringUtils.stringifyException(e));
@@ -5476,6 +5556,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public void dropConstraint(String dbName, String tableName, String constraintName)
     throws HiveException, NoSuchObjectException {
     try {
+      Table tbl = getTable(dbName, tableName);
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().dropConstraint(dbName, tableName, constraintName);
     } catch (NoSuchObjectException e) {
       throw e;
@@ -5807,6 +5892,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public void addPrimaryKey(List<SQLPrimaryKey> primaryKeyCols)
     throws HiveException, NoSuchObjectException {
     try {
+      Table tbl = getTable(primaryKeyCols.get(0).getTable_db(), primaryKeyCols.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addPrimaryKey(primaryKeyCols);
     } catch (Exception e) {
       throw new HiveException(e);
@@ -5816,6 +5906,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public void addForeignKey(List<SQLForeignKey> foreignKeyCols)
     throws HiveException, NoSuchObjectException {
     try {
+      Table tbl = getTable(foreignKeyCols.get(0).getFktable_db(), foreignKeyCols.get(0).getFktable_name());
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addForeignKey(foreignKeyCols);
     } catch (Exception e) {
       throw new HiveException(e);
@@ -5825,6 +5920,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public void addUniqueConstraint(List<SQLUniqueConstraint> uniqueConstraintCols)
     throws HiveException, NoSuchObjectException {
     try {
+      Table tbl = getTable(uniqueConstraintCols.get(0).getTable_db(), uniqueConstraintCols.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addUniqueConstraint(uniqueConstraintCols);
     } catch (Exception e) {
       throw new HiveException(e);
@@ -5834,6 +5934,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public void addNotNullConstraint(List<SQLNotNullConstraint> notNullConstraintCols)
     throws HiveException, NoSuchObjectException {
     try {
+      Table tbl = getTable(notNullConstraintCols.get(0).getTable_db(), notNullConstraintCols.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addNotNullConstraint(notNullConstraintCols);
     } catch (Exception e) {
       throw new HiveException(e);
@@ -5843,6 +5948,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public void addDefaultConstraint(List<SQLDefaultConstraint> defaultConstraints)
       throws HiveException, NoSuchObjectException {
     try {
+      Table tbl = getTable(defaultConstraints.get(0).getTable_db(), defaultConstraints.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addDefaultConstraint(defaultConstraints);
     } catch (Exception e) {
       throw new HiveException(e);
@@ -5852,6 +5962,11 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public void addCheckConstraint(List<SQLCheckConstraint> checkConstraints)
       throws HiveException, NoSuchObjectException {
     try {
+      Table tbl = getTable(checkConstraints.get(0).getTable_db(), checkConstraints.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl)) {
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addCheckConstraint(checkConstraints);
     } catch (Exception e) {
       throw new HiveException(e);

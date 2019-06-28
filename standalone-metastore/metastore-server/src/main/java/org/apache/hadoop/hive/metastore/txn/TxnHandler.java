@@ -56,6 +56,7 @@ import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.common.TableName;
 import org.apache.hadoop.hive.common.ValidReadTxnList;
 import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
 import org.apache.hadoop.hive.common.ValidTxnList;
@@ -1501,6 +1502,46 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
       throw new MetaException("invalid write id " + writeId + " for table " + fullTableName);
     } finally {
       close(rs, pst, null);
+    }
+  }
+
+  @Override
+  @RetrySemantics.ReadOnly
+  public GetTxnTableWriteIdsResponse getTxnTableWriteIds(long txnId) throws MetaException {
+    try {
+      PreparedStatement pst = null;
+      ResultSet rs = null;
+      Connection dbConn = null;
+      try {
+        /**
+         * This runs at READ_COMMITTED for exactly the same reason as {@link #getOpenTxnsInfo()}
+         */
+        dbConn = getDbConn(Connection.TRANSACTION_READ_COMMITTED);
+
+        List<String> params = Arrays.asList(Long.toString(txnId));
+        String s = "select t2w_database, t2w_table, t2w_writeid from TXN_TO_WRITE_ID where t2w_txnid = ?";
+        pst = sqlGenerator.prepareStmtWithParameters(dbConn, s, params);
+        LOG.debug("Going to execute query <" + s.replaceAll("\\?", "{}") + ">", txnId);
+        rs = pst.executeQuery();
+        List<TableWriteId> tableWriteIds = new ArrayList<>();
+        if (rs.next()) {
+          tableWriteIds.add(new TableWriteId(TableName.getDbTable(rs.getString(1), rs.getString(2)), rs.getLong(3)));
+        }
+        return new GetTxnTableWriteIdsResponse(tableWriteIds);
+      } catch (SQLException e) {
+        LOG.debug("Going to rollback");
+        rollbackDBConn(dbConn);
+        checkRetryable(dbConn, e, "getTxnTableWriteIds(" + txnId + ")");
+        throw new MetaException("Unable to get target transaction id "
+                + StringUtils.stringifyException(e));
+      } finally {
+        closeStmt(pst);
+        close(rs);
+        closeDbConn(dbConn);
+        unlockInternal();
+      }
+    } catch (RetryException e) {
+      return getTxnTableWriteIds(txnId);
     }
   }
 

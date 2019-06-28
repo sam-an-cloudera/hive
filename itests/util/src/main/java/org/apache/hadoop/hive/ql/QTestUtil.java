@@ -157,8 +157,9 @@ public class QTestUtil {
     }
 
     // Plug verifying metastore in for testing DirectSQL.
-    conf.setVar(ConfVars.METASTORE_RAW_STORE_IMPL, "org.apache.hadoop.hive.metastore.VerifyingObjectStore");
-
+    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.RAW_STORE_IMPL, "org.apache.hadoop.hive.metastore.cache.CachedStore");
+    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.TRANSACTIONAL_EVENT_LISTENERS, "org.apache.hive.hcatalog.listener.DbNotificationListener");
+    HiveConf.setVar(conf, HiveConf.ConfVars.HIVE_TXN_MANAGER, "org.apache.hadoop.hive.ql.lockmgr.DbTxnManager");
     miniClusters.initConf(conf);
   }
 
@@ -289,6 +290,7 @@ public class QTestUtil {
 
     conf.set("hive.metastore.filter.hook", "org.apache.hadoop.hive.metastore.DefaultMetaStoreFilterHookImpl");
     db = Hive.get(conf);
+    SessionState.get().initTxnMgr(conf);
 
     // First delete any MVs to avoid race conditions
     for (String dbName : db.getAllDatabases()) {

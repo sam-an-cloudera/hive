@@ -52,6 +52,9 @@ public class JSONUpdatePartitionColumnStatMessage extends UpdatePartitionColumnS
   @JsonProperty
   private String tableObjJson;
 
+  @JsonProperty
+  private String writeIds;
+
   /**
    * Default constructor, needed for Jackson.
    */
@@ -61,7 +64,7 @@ public class JSONUpdatePartitionColumnStatMessage extends UpdatePartitionColumnS
   public JSONUpdatePartitionColumnStatMessage(String server, String servicePrincipal, Long timestamp,
                                               ColumnStatistics colStats, List<String> partVals,
                                               Map<String, String> parameters,
-                                              Table tableObj, long writeId) {
+                                              Table tableObj, long writeId, String writeIds) {
     this.timestamp = timestamp;
     this.server = server;
     this.servicePrincipal = servicePrincipal;
@@ -75,6 +78,7 @@ public class JSONUpdatePartitionColumnStatMessage extends UpdatePartitionColumnS
       throw new IllegalArgumentException("Could not serialize JSONUpdatePartitionColumnStatMessage : ", e);
     }
     this.parameters = parameters;
+    this.writeIds = writeIds;
   }
 
   @Override
@@ -124,6 +128,11 @@ public class JSONUpdatePartitionColumnStatMessage extends UpdatePartitionColumnS
   @Override
   public Table getTableObject() throws Exception {
     return  (Table) MessageBuilder.getTObj(tableObjJson, Table.class);
+  }
+
+  @Override
+  public String getWriteIds() {
+    return writeIds;
   }
 
   @Override

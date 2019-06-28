@@ -759,7 +759,8 @@ public class DbNotificationListener extends TransactionalMetaStoreEventListener 
             .buildUpdateTableColumnStatMessage(updateTableColumnStatEvent.getColStats(),
                     updateTableColumnStatEvent.getTableObj(),
                     updateTableColumnStatEvent.getTableParameters(),
-                    updateTableColumnStatEvent.getWriteId());
+                    updateTableColumnStatEvent.getWriteId(),
+                    updateTableColumnStatEvent.getWriteIds());
     NotificationEvent event = new NotificationEvent(0, now(), EventType.UPDATE_TABLE_COLUMN_STAT.toString(),
                     msgEncoder.getSerializer().serialize(msg));
     ColumnStatisticsDesc statDesc = updateTableColumnStatEvent.getColStats().getStatsDesc();
@@ -789,7 +790,8 @@ public class DbNotificationListener extends TransactionalMetaStoreEventListener 
                     updatePartColStatEvent.getPartVals(),
                     updatePartColStatEvent.getPartParameters(),
                     updatePartColStatEvent.getTableObj(),
-                    updatePartColStatEvent.getWriteId());
+                    updatePartColStatEvent.getWriteId(),
+                    updatePartColStatEvent.getWriteIds());
     NotificationEvent event = new NotificationEvent(0, now(), EventType.UPDATE_PARTITION_COLUMN_STAT.toString(),
                     msgEncoder.getSerializer().serialize(msg));
     ColumnStatisticsDesc statDesc = updatePartColStatEvent.getPartColStats().getStatsDesc();

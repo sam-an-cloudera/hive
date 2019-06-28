@@ -10,6 +10,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.*;
 import org.apache.hadoop.hive.metastore.MetaStoreTestUtils;
 import org.apache.hadoop.hive.metastore.api.*;
+import org.apache.hadoop.hive.metastore.cache.CachedStore.MergedColumnStatsForPartitions;
 import org.apache.hadoop.hive.metastore.client.builder.DatabaseBuilder;
 import org.apache.hadoop.hive.metastore.client.builder.TableBuilder;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
@@ -44,7 +45,6 @@ public class TestCachedStoreUpdateUsingEvents {
     MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
     MetastoreConf.setVar(conf, ConfVars.TRANSACTIONAL_EVENT_LISTENERS, DbNotificationListener.class.getName());
     MetastoreConf.setVar(conf, ConfVars.RAW_STORE_IMPL, "org.apache.hadoop.hive.metastore.cache.CachedStore");
-    MetastoreConf.setBoolVar(conf, ConfVars.METASTORE_CACHE_CAN_USE_EVENT, true);
     MetastoreConf.setBoolVar(conf, ConfVars.HIVE_TXN_STATS_ENABLED, true);
     MetastoreConf.setBoolVar(conf, ConfVars.AGGREGATE_STATS_CACHE_ENABLED, false);
     MetaStoreTestUtils.setConfForStandloneMode(conf);
@@ -121,91 +121,13 @@ public class TestCachedStoreUpdateUsingEvents {
   }
 
   @Test
-  public void testDatabaseOpsForUpdateUsingEvents() throws Exception {
-    RawStore rawStore = hmsHandler.getMS();
-
-    // Prewarm CachedStore
-    CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(rawStore);
-
-    // Add a db via rawStore
-    String dbName = "testDatabaseOps";
-    String dbOwner = "user1";
-    Database db = createTestDb(dbName, dbOwner);
-
-    hmsHandler.create_database(db);
-    db = rawStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
-
-    // Read database via CachedStore
-    Database dbRead = sharedCache.getDatabaseFromCache(DEFAULT_CATALOG_NAME, dbName);
-    Assert.assertEquals(db, dbRead);
-
-    // Add another db via rawStore
-    final String dbName1 = "testDatabaseOps1";
-    Database db1 = createTestDb(dbName1, dbOwner);
-    hmsHandler.create_database(db1);
-    db1 = rawStore.getDatabase(DEFAULT_CATALOG_NAME, dbName1);
-
-    // Read database via CachedStore
-    dbRead = sharedCache.getDatabaseFromCache(DEFAULT_CATALOG_NAME, dbName1);
-    Assert.assertEquals(db1, dbRead);
-
-    // Alter the db via rawStore (can only alter owner or parameters)
-    dbOwner = "user2";
-    Database newdb = new Database(db);
-    newdb.setOwnerName(dbOwner);
-    hmsHandler.alter_database(dbName, newdb);
-    newdb = rawStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
-
-    // Read db via cachedStore
-    dbRead = sharedCache.getDatabaseFromCache(DEFAULT_CATALOG_NAME, dbName);
-    Assert.assertEquals(newdb, dbRead);
-
-    // Add another db via rawStore
-    final String dbName2 = "testDatabaseOps2";
-    Database db2 = createTestDb(dbName2, dbOwner);
-    hmsHandler.create_database(db2);
-    db2 = rawStore.getDatabase(DEFAULT_CATALOG_NAME, dbName2);
-
-    // Alter db "testDatabaseOps" via rawStore
-    dbOwner = "user1";
-    newdb = new Database(db);
-    newdb.setOwnerName(dbOwner);
-    hmsHandler.alter_database(dbName, newdb);
-    newdb = rawStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
-
-    // Drop db "testDatabaseOps1" via rawStore
-    Database dropDb = rawStore.getDatabase(DEFAULT_CATALOG_NAME, dbName1);
-    hmsHandler.drop_database(dbName1, true, true);
-
-    // Read the newly added db via CachedStore
-    dbRead = sharedCache.getDatabaseFromCache(DEFAULT_CATALOG_NAME, dbName2);
-    Assert.assertEquals(db2, dbRead);
-
-    // Read the altered db via CachedStore (altered user from "user2" to "user1")
-    dbRead = sharedCache.getDatabaseFromCache(DEFAULT_CATALOG_NAME, dbName);
-    Assert.assertEquals(newdb, dbRead);
-
-    // Try to read the dropped db after cache update
-    dbRead = sharedCache.getDatabaseFromCache(DEFAULT_CATALOG_NAME, dbName1);
-    Assert.assertEquals(null, dbRead);
-
-    // Clean up
-    hmsHandler.drop_database(dbName, true, true);
-    hmsHandler.drop_database(dbName2, true, true);
-    sharedCache.getDatabaseCache().clear();
-    sharedCache.clearTableCache();
-    sharedCache.getSdCache().clear();
-  }
-
-  @Test
   public void testTableOpsForUpdateUsingEvents() throws Exception {
     long lastEventId = -1;
     RawStore rawStore = hmsHandler.getMS();
 
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(rawStore);
+    CachedStore.prewarm(rawStore, conf);
 
     // Add a db via rawStore
     String dbName = "test_table_ops";
@@ -225,19 +147,17 @@ public class TestCachedStoreUpdateUsingEvents {
     List<FieldSchema> ptnCols = new ArrayList<FieldSchema>();
     Table tbl = createTestTbl(dbName, tblName, tblOwner, cols, ptnCols);
     hmsHandler.create_table(tbl);
-    tbl = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName);
+    tbl = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName, null);
 
-    // Read database, table via CachedStore
-    Database dbRead= sharedCache.getDatabaseFromCache(DEFAULT_CATALOG_NAME, dbName);
-    Assert.assertEquals(db, dbRead);
-    Table tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName);
+    // Read table via CachedStore
+    Table tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName, null);
     compareTables(tblRead, tbl);
 
     // Add a new table via rawStore
     String tblName2 = "tbl2";
     Table tbl2 = createTestTbl(dbName, tblName2, tblOwner, cols, ptnCols);
     hmsHandler.create_table(tbl2);
-    tbl2 = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName2);
+    tbl2 = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName2, null);
 
     // Alter table "tbl" via rawStore
     tblOwner = "role1";
@@ -245,7 +165,7 @@ public class TestCachedStoreUpdateUsingEvents {
     newTable.setOwner(tblOwner);
     newTable.setOwnerType(PrincipalType.ROLE);
     hmsHandler.alter_table(dbName, tblName, newTable);
-    newTable = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName);
+    newTable = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName, null);
 
     Assert.assertEquals("Owner of the table did not change.", tblOwner, newTable.getOwner());
     Assert.assertEquals("Owner type of the table did not change", PrincipalType.ROLE, newTable.getOwnerType());
@@ -254,23 +174,22 @@ public class TestCachedStoreUpdateUsingEvents {
     hmsHandler.drop_table(dbName, tblName2, true);
 
     // Read the altered "tbl" via CachedStore
-    tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName);
+    tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName, null);
     compareTables(tblRead, newTable);
 
     // Try to read the dropped "tbl2" via CachedStore (should throw exception)
-    tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName2);
+    tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName2, null);
     Assert.assertNull(tblRead);
 
     // Clean up
     hmsHandler.drop_database(dbName, true, true);
 
-    tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName2);
+    tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName2, null);
     Assert.assertNull(tblRead);
 
-    tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName);
+    tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName, null);
     Assert.assertNull(tblRead);
 
-    sharedCache.getDatabaseCache().clear();
     sharedCache.clearTableCache();
     sharedCache.getSdCache().clear();
   }
@@ -282,7 +201,7 @@ public class TestCachedStoreUpdateUsingEvents {
 
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(rawStore);
+    CachedStore.prewarm(rawStore, conf);
 
     // Add a db via rawStore
     String dbName = "test_partition_ops";
@@ -304,7 +223,7 @@ public class TestCachedStoreUpdateUsingEvents {
     ptnCols.add(ptnCol1);
     Table tbl = createTestTbl(dbName, tblName, tblOwner, cols, ptnCols);
     hmsHandler.create_table(tbl);
-    tbl = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName);
+    tbl = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName, null);
 
     final String ptnColVal1 = "aaa";
     Map<String, String> partParams = new HashMap<String, String>();
@@ -313,7 +232,7 @@ public class TestCachedStoreUpdateUsingEvents {
                     0, tbl.getSd(), partParams);
     ptn1.setCatName(DEFAULT_CATALOG_NAME);
     hmsHandler.add_partition(ptn1);
-    ptn1 = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal1));
+    ptn1 = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal1), null);
 
     final String ptnColVal2 = "bbb";
     Partition ptn2 =
@@ -321,13 +240,10 @@ public class TestCachedStoreUpdateUsingEvents {
                     0, tbl.getSd(), partParams);
     ptn2.setCatName(DEFAULT_CATALOG_NAME);
     hmsHandler.add_partition(ptn2);
-    ptn2 = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal2));
+    ptn2 = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal2), null);
 
-    // Read database, table, partition via CachedStore
-    Database dbRead = sharedCache.getDatabaseFromCache(DEFAULT_CATALOG_NAME.toLowerCase(), dbName.toLowerCase());
-    Assert.assertEquals(db, dbRead);
     Table tblRead = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME.toLowerCase(),
-            dbName.toLowerCase(), tblName.toLowerCase());
+            dbName.toLowerCase(), tblName.toLowerCase(), null);
     compareTables(tbl, tblRead);
     Partition ptn1Read = sharedCache.getPartitionFromCache(DEFAULT_CATALOG_NAME.toLowerCase(),
             dbName.toLowerCase(), tblName.toLowerCase(), Arrays.asList(ptnColVal1));
@@ -343,20 +259,20 @@ public class TestCachedStoreUpdateUsingEvents {
                     0, tbl.getSd(), partParams);
     ptn3.setCatName(DEFAULT_CATALOG_NAME);
     hmsHandler.add_partition(ptn3);
-    ptn3 = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal3));
+    ptn3 = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal3), null);
 
     // Alter an existing partition ("aaa") via rawStore
-    ptn1 = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal1));
+    ptn1 = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal1), null);
     final String ptnColVal1Alt = "aaa";
     Partition ptn1Atl =
             new Partition(Arrays.asList(ptnColVal1Alt), dbName, tblName, 0,
                     0, tbl.getSd(), partParams);
     ptn1Atl.setCatName(DEFAULT_CATALOG_NAME);
     hmsHandler.alter_partitions(dbName, tblName, Arrays.asList(ptn1Atl));
-    ptn1Atl = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal1Alt));
+    ptn1Atl = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal1Alt), null);
 
     // Drop an existing partition ("bbb") via rawStore
-    Partition ptnDrop = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal2));
+    Partition ptnDrop = rawStore.getPartition(DEFAULT_CATALOG_NAME, dbName, tblName, Arrays.asList(ptnColVal2), null);
     hmsHandler.drop_partition(dbName, tblName, Arrays.asList(ptnColVal2), false);
 
     // Read the newly added partition via CachedStore
@@ -382,13 +298,12 @@ public class TestCachedStoreUpdateUsingEvents {
 
     // Clean up
     rawStore.dropDatabase(DEFAULT_CATALOG_NAME, dbName);
-    sharedCache.getDatabaseCache().clear();
     sharedCache.clearTableCache();
     sharedCache.getSdCache().clear();
   }
 
-  private void updateTableColStats(String dbName, String tblName, String[] colName,
-                                   double highValue, double avgColLen, boolean isTxnTable) throws Throwable {
+  private long updateTableColStats(String dbName, String tblName, String[] colName,
+                                   double highValue, double avgColLen, boolean isTxnTable, long lastEventId) throws Throwable {
     long writeId = -1;
     String validWriteIds = null;
     if (isTxnTable) {
@@ -412,6 +327,7 @@ public class TestCachedStoreUpdateUsingEvents {
 
     // write stats objs persistently
     hmsHandler.update_table_column_statistics_req(setTblColStat);
+    lastEventId = CachedStore.updateUsingNotificationEvents(rawStore, lastEventId, null);
     validateTablePara(dbName, tblName);
 
     ColumnStatistics colStatsCache = sharedCache.getTableColStatsFromCache(DEFAULT_CATALOG_NAME,
@@ -423,10 +339,11 @@ public class TestCachedStoreUpdateUsingEvents {
             dbName, tblName, Lists.newArrayList(colName[1]), validWriteIds, true);
     Assert.assertEquals(colStatsCache.getStatsObj().get(0).getColName(), colName[1]);
     verifyStatString(colStatsCache.getStatsObj().get(0), colName[1], avgColLen);
+    return lastEventId;
   }
 
-  private void updatePartColStats(String dbName, String tblName, boolean isTxnTable, String[] colName,
-                                  String partName, double highValue, double avgColLen) throws Throwable {
+  private long updatePartColStats(String dbName, String tblName, boolean isTxnTable, String[] colName,
+                                  String partName, double highValue, double avgColLen, long lastEventId) throws Throwable {
     long writeId = -1;
     String validWriteIds = null;
     List<Long> txnIds = null;
@@ -471,7 +388,7 @@ public class TestCachedStoreUpdateUsingEvents {
     } else {
       Assert.assertEquals(statRowStore.get(0).isIsStatsCompliant(), false);
     }
-
+    lastEventId = CachedStore.updateUsingNotificationEvents(rawStore, lastEventId, conf);
     List<ColumnStatistics> statSharedCache = sharedCache.getPartitionColStatsListFromCache(DEFAULT_CATALOG_NAME,
             dbName, tblName, Collections.singletonList(partName), Collections.singletonList(colName[1]),
             validWriteIds, true);
@@ -489,6 +406,8 @@ public class TestCachedStoreUpdateUsingEvents {
     statPartCache = sharedCache.getPartitionColStatsFromCache(DEFAULT_CATALOG_NAME, dbName, tblName,
             CachedStore.partNameToVals(partName), colName[1], validWriteIds);
     verifyStatString(statPartCache.getColumnStatisticsObj(), colName[1], avgColLen);
+
+    return lastEventId;
   }
 
   private List<ColumnStatisticsObj> getStatsObjects(String dbName, String tblName, String[] colName,
@@ -572,7 +491,7 @@ public class TestCachedStoreUpdateUsingEvents {
 
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(rawStore);
+    CachedStore.prewarm(rawStore, conf);
 
     // Add a db via rawStore
     Database db = createTestDb(dbName, dbOwner);
@@ -670,8 +589,8 @@ public class TestCachedStoreUpdateUsingEvents {
   }
 
   private void validateTablePara(String dbName, String tblName) throws Throwable {
-    Table tblRead = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName);
-    Table tblRead1 = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName);
+    Table tblRead = rawStore.getTable(DEFAULT_CATALOG_NAME, dbName, tblName, null);
+    Table tblRead1 = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbName, tblName, null);
     Assert.assertEquals(tblRead.getParameters(), tblRead1.getParameters());
   }
 
@@ -706,18 +625,19 @@ public class TestCachedStoreUpdateUsingEvents {
     String[] colName = new String[]{"income", "name"};
     double highValue = 1200000.4525;
     double avgColLen = 50.30;
+    long lastEventId = 0;
 
     setUpBeforeTest(dbName, tblName, colName, isTxnTable);
-    updateTableColStats(dbName, tblName, colName, highValue, avgColLen, isTxnTable);
+    lastEventId = updateTableColStats(dbName, tblName, colName, highValue, avgColLen, isTxnTable, lastEventId);
     if (!isTxnTable) {
       deleteColStats(dbName, tblName, colName);
     }
 
     tblName = "tbl_part";
     createTableWithPart(dbName, tblName, colName, isTxnTable);
-    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1);
+    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1, null);
     String partName = partitions.get(0);
-    updatePartColStats(dbName, tblName, isTxnTable, colName, partName, highValue, avgColLen);
+    lastEventId = updatePartColStats(dbName, tblName, isTxnTable, colName, partName, highValue, avgColLen, lastEventId);
     if (!isTxnTable) {
       deletePartColStats(dbName, tblName, colName, partName);
     }
@@ -747,11 +667,12 @@ public class TestCachedStoreUpdateUsingEvents {
 
     setUpBeforeTest(dbName, null, colName, true);
     createTableWithPart(dbName, tblName, colName, true);
-    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1);
+    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1, null);
     String partName = partitions.get(0);
-    updatePartColStats(dbName, tblName, true, colName, partName, highValue, avgColLen);
-    updatePartColStats(dbName, tblName, true, colName, partName, 1200000.4521, avgColLen);
-    updatePartColStats(dbName, tblName, true, colName, partName, highValue, 34.78);
+    long lastEventId = 0;
+    lastEventId = updatePartColStats(dbName, tblName, true, colName, partName, highValue, avgColLen, lastEventId);
+    lastEventId = updatePartColStats(dbName, tblName, true, colName, partName, 1200000.4521, avgColLen, lastEventId);
+    lastEventId = updatePartColStats(dbName, tblName, true, colName, partName, highValue, 34.78, lastEventId);
   }
 
   @Test
@@ -761,10 +682,11 @@ public class TestCachedStoreUpdateUsingEvents {
     String[] colName = new String[]{"income", "name"};
     double highValue = 1200000.4525;
     double avgColLen = 50.30;
+    long lastEventId = 0;
 
     setUpBeforeTest(dbName, null, colName, true);
     createTableWithPart(dbName, tblName, colName, true);
-    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1);
+    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1, null);
     String partName = partitions.get(0);
 
     List<Long> txnIds = allocateTxns(1);
@@ -804,6 +726,7 @@ public class TestCachedStoreUpdateUsingEvents {
     verifyStat(statRawStore.get(0).getStatsObj(), colName, highValue, avgColLen);
     Assert.assertEquals(statRawStore.get(0).isIsStatsCompliant(), false);
 
+    lastEventId = CachedStore.updateUsingNotificationEvents(rawStore, lastEventId, conf);
     List<ColumnStatistics> statsListFromCache = sharedCache.getPartitionColStatsListFromCache(DEFAULT_CATALOG_NAME,
             dbName, tblName, Collections.singletonList(partName), Collections.singletonList(colName[1]),
             validWriteIds, true);
@@ -824,14 +747,15 @@ public class TestCachedStoreUpdateUsingEvents {
     String[] colName = new String[]{"income", "name"};
     double highValue = 1200000.4121;
     double avgColLen = 23.30;
+    long lastEventId = 0;
 
     setUpBeforeTest(dbName, null, colName, true);
     createTableWithPart(dbName, tblName, colName, true);
-    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1);
+    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1, null);
     String partName = partitions.get(0);
 
     // update part col stats successfully.
-    updatePartColStats(dbName, tblName, true, colName, partName, 1.2, 12.2);
+    lastEventId = updatePartColStats(dbName, tblName, true, colName, partName, 1.2, 12.2, lastEventId);
 
     List<Long> txnIds = allocateTxns(1);
     long writeId = allocateWriteIds(txnIds, dbName, tblName).get(0).getWriteId();
@@ -854,6 +778,7 @@ public class TestCachedStoreUpdateUsingEvents {
 
     // write stats objs persistently
     hmsHandler.update_partition_column_statistics_req(setTblColStat);
+    lastEventId = CachedStore.updateUsingNotificationEvents(rawStore, lastEventId, conf);
 
     // keep the txn open and verify that the stats got is not compliant.
 
@@ -904,9 +829,9 @@ public class TestCachedStoreUpdateUsingEvents {
     Assert.assertEquals(aggrStatsCached, aggrStats);
     //Assert.assertEquals(aggrStatsCached.isIsStatsCompliant(), true);
 
-    List<ColumnStatisticsObj> stats = sharedCache.getAggrStatsFromCache(DEFAULT_CATALOG_NAME, dbName, tblName,
-            Collections.singletonList(colName[0]), SharedCache.StatsType.ALL);
-    Assert.assertEquals(stats.get(0).getStatsData().getDoubleStats().getHighValue(), highValue, 0.01);
+    MergedColumnStatsForPartitions stats = CachedStore.mergeColStatsForPartitions(DEFAULT_CATALOG_NAME, dbName, tblName, Lists.newArrayList("income=1", "income=2"),
+        Collections.singletonList(colName[0]), sharedCache, SharedCache.StatsType.ALL, validWriteIds, false, 0.0);
+    Assert.assertEquals(stats.colStats.get(0).getStatsData().getDoubleStats().getHighValue(), highValue, 0.01);
   }
 
   @Test
@@ -917,15 +842,17 @@ public class TestCachedStoreUpdateUsingEvents {
 
     setUpBeforeTest(dbName, null, colName, false);
     createTableWithPart(dbName, tblName, colName, false);
-    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short) -1);
+    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short) -1, null);
     String partName = partitions.get(0);
 
     // update part col stats successfully.
-    updatePartColStats(dbName, tblName, false, colName, partitions.get(0), 2, 12);
-    updatePartColStats(dbName, tblName, false, colName, partitions.get(1), 4, 10);
+    long lastEventId = 0;
+    lastEventId = updatePartColStats(dbName, tblName, false, colName, partitions.get(0), 2, 12, lastEventId);
+    lastEventId = updatePartColStats(dbName, tblName, false, colName, partitions.get(1), 4, 10, lastEventId);
+    lastEventId = CachedStore.updateUsingNotificationEvents(rawStore, lastEventId, conf);
     verifyAggrStat(dbName, tblName, colName, partitions, false, 4);
 
-    updatePartColStats(dbName, tblName, false, colName, partitions.get(1), 3, 10);
+    lastEventId = updatePartColStats(dbName, tblName, false, colName, partitions.get(1), 3, 10, lastEventId);
     verifyAggrStat(dbName, tblName, colName, partitions, false, 3);
   }
 
@@ -934,18 +861,19 @@ public class TestCachedStoreUpdateUsingEvents {
     String dbName = "aggr_stats_test_db_txn";
     String tblName = "tbl_part";
     String[] colName = new String[]{"income", "name"};
+    long lastEventId = 0;
 
     setUpBeforeTest(dbName, null, colName, true);
     createTableWithPart(dbName, tblName, colName, true);
-    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1);
+    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1, null);
     String partName = partitions.get(0);
 
     // update part col stats successfully.
-    updatePartColStats(dbName, tblName, true, colName, partitions.get(0), 2, 12);
-    updatePartColStats(dbName, tblName, true, colName, partitions.get(1), 4, 10);
+    lastEventId = updatePartColStats(dbName, tblName, true, colName, partitions.get(0), 2, 12, lastEventId);
+    lastEventId = updatePartColStats(dbName, tblName, true, colName, partitions.get(1), 4, 10, lastEventId);
     verifyAggrStat(dbName, tblName, colName, partitions, true, 4);
 
-    updatePartColStats(dbName, tblName, true, colName, partitions.get(1), 3, 10);
+    lastEventId = updatePartColStats(dbName, tblName, true, colName, partitions.get(1), 3, 10, lastEventId);
     verifyAggrStat(dbName, tblName, colName, partitions, true, 3);
 
     List<Long> txnIds = allocateTxns(1);
@@ -988,15 +916,16 @@ public class TestCachedStoreUpdateUsingEvents {
     String dbName = "aggr_stats_test_db_txn_abort";
     String tblName = "tbl_part";
     String[] colName = new String[]{"income", "name"};
+    long lastEventId = 0;
 
     setUpBeforeTest(dbName, null, colName, true);
     createTableWithPart(dbName, tblName, colName, true);
-    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1);
+    List<String> partitions = hmsHandler.get_partition_names(dbName, tblName, (short)-1, null);
     String partName = partitions.get(0);
 
     // update part col stats successfully.
-    updatePartColStats(dbName, tblName, true, colName, partitions.get(0), 2, 12);
-    updatePartColStats(dbName, tblName, true, colName, partitions.get(1), 4, 10);
+    lastEventId = updatePartColStats(dbName, tblName, true, colName, partitions.get(0), 2, 12, lastEventId);
+    lastEventId = updatePartColStats(dbName, tblName, true, colName, partitions.get(1), 4, 10, lastEventId);
     verifyAggrStat(dbName, tblName, colName, partitions, true, 4);
 
     List<Long> txnIds = allocateTxns(4);

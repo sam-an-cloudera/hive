@@ -1738,35 +1738,38 @@ public class Driver implements IDriver {
     }
     // If we've opened a transaction we need to commit or rollback rather than explicitly
     // releasing the locks.
-    conf.unset(ValidTxnList.VALID_TXNS_KEY);
-    conf.unset(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY);
     if(!checkConcurrency()) {
       return;
     }
-    if (txnMgr.isTxnOpen()) {
-      if (commit) {
-        if(conf.getBoolVar(ConfVars.HIVE_IN_TEST) && conf.getBoolVar(ConfVars.HIVETESTMODEROLLBACKTXN)) {
+    try {
+      if (txnMgr.isTxnOpen()) {
+        if (commit) {
+          if(conf.getBoolVar(ConfVars.HIVE_IN_TEST) && conf.getBoolVar(ConfVars.HIVETESTMODEROLLBACKTXN)) {
+            txnMgr.rollbackTxn();
+          }
+          else {
+            txnMgr.commitTxn();//both commit & rollback clear ALL locks for this tx
+          }
+        } else {
           txnMgr.rollbackTxn();
         }
-        else {
-          txnMgr.commitTxn();//both commit & rollback clear ALL locks for this tx
-        }
       } else {
-        txnMgr.rollbackTxn();
+        //since there is no tx, we only have locks for current query (if any)
+        if (ctx != null && ctx.getHiveLocks() != null) {
+          hiveLocks.addAll(ctx.getHiveLocks());
+        }
+        txnMgr.releaseLocks(hiveLocks);
       }
-    } else {
-      //since there is no tx, we only have locks for current query (if any)
-      if (ctx != null && ctx.getHiveLocks() != null) {
-        hiveLocks.addAll(ctx.getHiveLocks());
+    } finally {
+      hiveLocks.clear();
+      if (ctx != null) {
+        ctx.setHiveLocks(null);
       }
-      txnMgr.releaseLocks(hiveLocks);
-    }
-    hiveLocks.clear();
-    if (ctx != null) {
-      ctx.setHiveLocks(null);
-    }
 
-    perfLogger.PerfLogEnd(CLASS_NAME, PerfLogger.RELEASE_LOCKS);
+      conf.unset(ValidTxnList.VALID_TXNS_KEY);
+      conf.unset(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY);
+      perfLogger.PerfLogEnd(CLASS_NAME, PerfLogger.RELEASE_LOCKS);
+    }
   }
 
   /**

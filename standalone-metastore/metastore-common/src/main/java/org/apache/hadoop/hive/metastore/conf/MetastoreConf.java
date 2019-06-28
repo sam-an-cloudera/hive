@@ -349,9 +349,6 @@ public class MetastoreConf {
     CATALOG_DEFAULT("metastore.catalog.default", "metastore.catalog.default", "hive",
         "The default catalog to use when a catalog is not specified.  Default is 'hive' (the " +
             "default catalog)."),
-    CATALOGS_TO_CACHE("metastore.cached.rawstore.catalogs", "metastore.cached.rawstore.catalogs",
-        "hive", "Comma separated list of catalogs to cache in the CachedStore. Default is 'hive' " +
-        "(the default catalog).  Empty string means all catalogs will be cached."),
     CLIENT_CONNECT_RETRY_DELAY("metastore.client.connect.retry.delay",
         "hive.metastore.client.connect.retry.delay", 1, TimeUnit.SECONDS,
         "Number of seconds for the client to wait between consecutive connection attempts"),
@@ -990,10 +987,8 @@ public class MetastoreConf {
         "Time interval describing how often the reaper runs"),
     TOKEN_SIGNATURE("metastore.token.signature", "hive.metastore.token.signature", "",
         "The delegation token service name to match when selecting a token from the current user's tokens."),
-    METASTORE_CACHE_CAN_USE_EVENT("metastore.cache.can.use.event", "hive.metastore.cache.can.use.event", false,
-            "Can notification events from notification log table be used for updating the metastore cache."),
     TRANSACTIONAL_EVENT_LISTENERS("metastore.transactional.event.listeners",
-        "hive.metastore.transactional.event.listeners", "",
+        "hive.metastore.transactional.event.listeners", "org.apache.hive.hcatalog.listener.DbNotificationListener",
         "A comma separated list of Java classes that implement the org.apache.riven.MetaStoreEventListener" +
             " interface. Both the metastore event and corresponding listener method will be invoked in the same JDO transaction."),
     TRY_DIRECT_SQL("metastore.try.direct.sql", "hive.metastore.try.direct.sql", true,

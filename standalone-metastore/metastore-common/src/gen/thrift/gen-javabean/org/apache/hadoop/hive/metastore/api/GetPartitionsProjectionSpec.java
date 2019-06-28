@@ -509,13 +509,13 @@ import org.slf4j.LoggerFactory;
           case 1: // FIELD_LIST
             if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
               {
-                org.apache.thrift.protocol.TList _list1040 = iprot.readListBegin();
-                struct.fieldList = new ArrayList<String>(_list1040.size);
-                String _elem1041;
-                for (int _i1042 = 0; _i1042 < _list1040.size; ++_i1042)
+                org.apache.thrift.protocol.TList _list1048 = iprot.readListBegin();
+                struct.fieldList = new ArrayList<String>(_list1048.size);
+                String _elem1049;
+                for (int _i1050 = 0; _i1050 < _list1048.size; ++_i1050)
                 {
-                  _elem1041 = iprot.readString();
-                  struct.fieldList.add(_elem1041);
+                  _elem1049 = iprot.readString();
+                  struct.fieldList.add(_elem1049);
                 }
                 iprot.readListEnd();
               }
@@ -557,9 +557,9 @@ import org.slf4j.LoggerFactory;
         oprot.writeFieldBegin(FIELD_LIST_FIELD_DESC);
         {
           oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, struct.fieldList.size()));
-          for (String _iter1043 : struct.fieldList)
+          for (String _iter1051 : struct.fieldList)
           {
-            oprot.writeString(_iter1043);
+            oprot.writeString(_iter1051);
           }
           oprot.writeListEnd();
         }
@@ -606,9 +606,9 @@ import org.slf4j.LoggerFactory;
       if (struct.isSetFieldList()) {
         {
           oprot.writeI32(struct.fieldList.size());
-          for (String _iter1044 : struct.fieldList)
+          for (String _iter1052 : struct.fieldList)
           {
-            oprot.writeString(_iter1044);
+            oprot.writeString(_iter1052);
           }
         }
       }
@@ -626,13 +626,13 @@ import org.slf4j.LoggerFactory;
       BitSet incoming = iprot.readBitSet(3);
       if (incoming.get(0)) {
         {
-          org.apache.thrift.protocol.TList _list1045 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, iprot.readI32());
-          struct.fieldList = new ArrayList<String>(_list1045.size);
-          String _elem1046;
-          for (int _i1047 = 0; _i1047 < _list1045.size; ++_i1047)
+          org.apache.thrift.protocol.TList _list1053 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRING, iprot.readI32());
+          struct.fieldList = new ArrayList<String>(_list1053.size);
+          String _elem1054;
+          for (int _i1055 = 0; _i1055 < _list1053.size; ++_i1055)
           {
-            _elem1046 = iprot.readString();
-            struct.fieldList.add(_elem1046);
+            _elem1054 = iprot.readString();
+            struct.fieldList.add(_elem1054);
           }
         }
         struct.setFieldListIsSet(true);

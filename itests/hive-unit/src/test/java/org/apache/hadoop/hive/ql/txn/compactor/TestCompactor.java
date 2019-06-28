@@ -1699,6 +1699,9 @@ public class TestCompactor {
       public RangeResponse isWriteIdRangeAborted(long minWriteId, long maxWriteId) {
         return RangeResponse.ALL;
       }
+
+      @Override
+      public void commitWriteId(long writeId) {};
     };
 
     OrcInputFormat aif = new OrcInputFormat();

@@ -21,7 +21,6 @@ import java.lang.reflect.Field;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -51,26 +50,23 @@ import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
 import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.StatObjectConverter;
-import org.apache.hadoop.hive.metastore.TableType;
 import org.apache.hadoop.hive.metastore.Warehouse;
 import org.apache.hadoop.hive.metastore.api.AggrStats;
 import org.apache.hadoop.hive.metastore.api.ColumnStatistics;
-import org.apache.hadoop.hive.metastore.api.Catalog;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsDesc;
-import org.apache.hadoop.hive.metastore.api.Database;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.Partition;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
-import org.apache.hadoop.hive.metastore.api.TableMeta;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
 import org.apache.hadoop.hive.metastore.txn.TxnUtils;
 import org.apache.hadoop.hive.metastore.utils.MetaStoreServerUtils;
 import org.apache.hadoop.hive.metastore.utils.StringUtils;
 import org.apache.hadoop.hive.ql.util.IncrementalObjectSizeEstimator;
 import org.apache.hadoop.hive.ql.util.IncrementalObjectSizeEstimator.ObjectEstimator;
+import org.apache.hive.common.util.TxnIdUtils;
 import org.eclipse.jetty.util.ConcurrentHashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,16 +78,6 @@ import static org.apache.hadoop.hive.metastore.utils.StringUtils.normalizeIdenti
 public class SharedCache {
   private static ReentrantReadWriteLock cacheLock = new ReentrantReadWriteLock(true);
   private static final long MAX_DEFAULT_CACHE_SIZE = 1024 * 1024;
-  private boolean isCatalogCachePrewarmed = false;
-  private Map<String, Catalog> catalogCache = new TreeMap<>();
-  private HashSet<String> catalogsDeletedDuringPrewarm = new HashSet<>();
-  private AtomicBoolean isCatalogCacheDirty = new AtomicBoolean(false);
-
-  // For caching Database objects. Key is database name
-  private Map<String, Database> databaseCache = new TreeMap<>();
-  private boolean isDatabaseCachePrewarmed = false;
-  private HashSet<String> databasesDeletedDuringPrewarm = new HashSet<>();
-  private AtomicBoolean isDatabaseCacheDirty = new AtomicBoolean(false);
 
   // For caching TableWrapper objects. Key is aggregate of database name and table name
   private Cache<String, TableWrapper> tableCache = null;
@@ -286,12 +272,16 @@ public class SharedCache {
     private Map<String, List<ColumnStatisticsObj>> aggrColStatsCache =
         new ConcurrentHashMap<String, List<ColumnStatisticsObj>>();
     private AtomicBoolean isAggrPartitionColStatsCacheDirty = new AtomicBoolean(false);
+    private ValidWriteIdList writeIds;
+    private boolean valid = false;
 
-    TableWrapper(Table t, byte[] sdHash, String location, Map<String, String> parameters) {
+    TableWrapper(Table t, byte[] sdHash, String location, Map<String, String> parameters, ValidWriteIdList writeIds) {
       this.t = t;
       this.sdHash = sdHash;
       this.location = location;
       this.parameters = parameters;
+      this.writeIds = writeIds;
+      this.valid = false;
       this.tableColStatsCacheSize = 0;
       this.partitionCacheSize = 0;
       this.partitionColStatsCacheSize = 0;
@@ -609,35 +599,6 @@ public class SharedCache {
       }
     }
 
-    public void refreshPartitions(List<Partition> partitions, SharedCache sharedCache) {
-      Map<String, PartitionWrapper> newPartitionCache = new HashMap<String, PartitionWrapper>();
-      try {
-        tableLock.writeLock().lock();
-        int size = 0;
-        for (Partition part : partitions) {
-          if (isPartitionCacheDirty.compareAndSet(true, false)) {
-            LOG.debug("Skipping partition cache update for table: " + getTable().getTableName()
-                + "; the partition list we have is dirty.");
-            return;
-          }
-          String key = CacheUtils.buildPartitionCacheKey(part.getValues());
-          PartitionWrapper wrapper = partitionCache.get(key);
-          if (wrapper != null) {
-            if (wrapper.getSdHash() != null) {
-              sharedCache.decrSd(wrapper.getSdHash());
-            }
-          }
-          wrapper = makePartitionWrapper(part, sharedCache);
-          newPartitionCache.put(key, wrapper);
-          size += getObjectSize(PartitionWrapper.class, wrapper);
-        }
-        partitionCache = newPartitionCache;
-        updateMemberSize(MemberName.PARTITION_CACHE, size, SizeMode.Snapshot);
-      } finally {
-        tableLock.writeLock().unlock();
-      }
-    }
-
     public boolean updateTableColStats(List<ColumnStatisticsObj> colStatsForTable) {
       try {
         tableLock.writeLock().lock();
@@ -660,29 +621,6 @@ public class SharedCache {
         updateMemberSize(MemberName.TABLE_COL_STATS_CACHE, statsSize, SizeMode.Delta);
         isTableColStatsCacheDirty.set(true);
         return true;
-      } finally {
-        tableLock.writeLock().unlock();
-      }
-    }
-
-    public void refreshTableColStats(List<ColumnStatisticsObj> colStatsForTable) {
-      Map<String, ColumnStatisticsObj> newTableColStatsCache = new HashMap<String, ColumnStatisticsObj>();
-      try {
-        tableLock.writeLock().lock();
-        int statsSize = 0;
-        for (ColumnStatisticsObj colStatObj : colStatsForTable) {
-          if (isTableColStatsCacheDirty.compareAndSet(true, false)) {
-            LOG.debug("Skipping table col stats cache update for table: " + getTable().getTableName()
-                + "; the table col stats list we have is dirty.");
-            return;
-          }
-          String key = colStatObj.getColName();
-          // TODO: get rid of deepCopy after making sure callers don't use references
-          newTableColStatsCache.put(key, colStatObj.deepCopy());
-          statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
-        }
-        tableColStatsCache = newTableColStatsCache;
-        updateMemberSize(MemberName.TABLE_COL_STATS_CACHE, statsSize, SizeMode.Snapshot);
       } finally {
         tableLock.writeLock().unlock();
       }
@@ -882,43 +820,6 @@ public class SharedCache {
       }
     }
 
-    public void refreshPartitionColStats(List<ColumnStatistics> partitionColStats) {
-      Map<String, ColumnStatisticsObj> newPartitionColStatsCache = new HashMap<String, ColumnStatisticsObj>();
-      try {
-        tableLock.writeLock().lock();
-        String tableName = StringUtils.normalizeIdentifier(getTable().getTableName());
-        int statsSize = 0;
-        for (ColumnStatistics cs : partitionColStats) {
-          if (isPartitionColStatsCacheDirty.compareAndSet(true, false)) {
-            LOG.debug("Skipping partition column stats cache update for table: " + getTable().getTableName()
-                + "; the partition column stats list we have is dirty");
-            return;
-          }
-          List<String> partVal;
-          try {
-            partVal = Warehouse.makeValsFromName(cs.getStatsDesc().getPartName(), null);
-            List<ColumnStatisticsObj> colStatsObjs = cs.getStatsObj();
-            for (ColumnStatisticsObj colStatObj : colStatsObjs) {
-              if (isPartitionColStatsCacheDirty.compareAndSet(true, false)) {
-                LOG.debug("Skipping partition column stats cache update for table: " + getTable().getTableName()
-                    + "; the partition column list we have is dirty");
-                return;
-              }
-              String key = CacheUtils.buildPartitonColStatsCacheKey(partVal, colStatObj.getColName());
-              newPartitionColStatsCache.put(key, colStatObj.deepCopy());
-              statsSize += getObjectSize(ColumnStatisticsObj.class, colStatObj);
-            }
-          } catch (MetaException e) {
-            LOG.debug("Unable to cache partition column stats for table: " + tableName, e);
-          }
-        }
-        partitionColStatsCache = newPartitionColStatsCache;
-        updateMemberSize(MemberName.PARTITION_COL_STATS_CACHE, statsSize, SizeMode.Snapshot);
-      } finally {
-        tableLock.writeLock().unlock();
-      }
-    }
-
     public List<ColumnStatisticsObj> getAggrPartitionColStats(List<String> colNames, StatsType statsType) {
       List<ColumnStatisticsObj> colStats = new ArrayList<ColumnStatisticsObj>();
       try {
@@ -1082,6 +983,18 @@ public class SharedCache {
       }
       return wrapper;
     }
+
+    ValidWriteIdList getWriteIds() {
+     return writeIds;
+    }
+
+    boolean isValid() {
+      return valid;
+    }
+
+    void setValid(boolean valid) {
+      this.valid = valid;
+    }
   }
 
   static class PartitionWrapper {
@@ -1150,247 +1063,10 @@ public class SharedCache {
     }
   }
 
-  public void populateCatalogsInCache(Collection<Catalog> catalogs) {
-    for (Catalog cat : catalogs) {
-      Catalog catCopy = cat.deepCopy();
-      // ObjectStore also stores db name in lowercase
-      catCopy.setName(catCopy.getName().toLowerCase());
-      try {
-        cacheLock.writeLock().lock();
-        // Since we allow write operations on cache while prewarm is happening:
-        // 1. Don't add databases that were deleted while we were preparing list for prewarm
-        // 2. Skip overwriting exisiting db object
-        // (which is present because it was added after prewarm started)
-        if (catalogsDeletedDuringPrewarm.contains(catCopy.getName())) {
-          continue;
-        }
-        catalogCache.putIfAbsent(catCopy.getName(), catCopy);
-        catalogsDeletedDuringPrewarm.clear();
-        isCatalogCachePrewarmed = true;
-      } finally {
-        cacheLock.writeLock().unlock();
-      }
-    }
-  }
-
-  public Catalog getCatalogFromCache(String name) {
-    Catalog cat = null;
-    try {
-      cacheLock.readLock().lock();
-      if (catalogCache.get(name) != null) {
-        cat = catalogCache.get(name).deepCopy();
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-    return cat;
-  }
-
-  public void addCatalogToCache(Catalog cat) {
-    try {
-      cacheLock.writeLock().lock();
-      Catalog catCopy = cat.deepCopy();
-      // ObjectStore also stores db name in lowercase
-      catCopy.setName(catCopy.getName().toLowerCase());
-      catalogCache.put(cat.getName(), catCopy);
-      isCatalogCacheDirty.set(true);
-    } finally {
-      cacheLock.writeLock().unlock();
-    }
-  }
-
-  public void alterCatalogInCache(String catName, Catalog newCat) {
-    try {
-      cacheLock.writeLock().lock();
-      removeCatalogFromCache(catName);
-      addCatalogToCache(newCat.deepCopy());
-    } finally {
-      cacheLock.writeLock().unlock();
-    }
-  }
-
-  public void removeCatalogFromCache(String name) {
-    name = normalizeIdentifier(name);
-    try {
-      cacheLock.writeLock().lock();
-      // If db cache is not yet prewarmed, add this to a set which the prewarm thread can check
-      // so that the prewarm thread does not add it back
-      if (!isCatalogCachePrewarmed) {
-        catalogsDeletedDuringPrewarm.add(name);
-      }
-      if (catalogCache.remove(name) != null) {
-        isCatalogCacheDirty.set(true);
-      }
-    } finally {
-      cacheLock.writeLock().unlock();
-    }
-  }
-
-  public List<String> listCachedCatalogs() {
-    try {
-      cacheLock.readLock().lock();
-      return new ArrayList<>(catalogCache.keySet());
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-  }
-
-  public boolean isCatalogCachePrewarmed() {
-    return isCatalogCachePrewarmed;
-  }
-
-  public Database getDatabaseFromCache(String catName, String name) {
-    Database db = null;
-    try {
-      cacheLock.readLock().lock();
-      String key = CacheUtils.buildDbKey(catName, name);
-      if (databaseCache.get(key) != null) {
-        db = databaseCache.get(key).deepCopy();
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-    return db;
-  }
-
-  public void populateDatabasesInCache(List<Database> databases) {
-    for (Database db : databases) {
-      Database dbCopy = db.deepCopy();
-      // ObjectStore also stores db name in lowercase
-      dbCopy.setName(dbCopy.getName().toLowerCase());
-      try {
-        cacheLock.writeLock().lock();
-        // Since we allow write operations on cache while prewarm is happening:
-        // 1. Don't add databases that were deleted while we were preparing list for prewarm
-        // 2. Skip overwriting exisiting db object
-        // (which is present because it was added after prewarm started)
-        String key = CacheUtils.buildDbKey(dbCopy.getCatalogName().toLowerCase(), dbCopy.getName().toLowerCase());
-        if (databasesDeletedDuringPrewarm.contains(key)) {
-          continue;
-        }
-        databaseCache.putIfAbsent(key, dbCopy);
-        databasesDeletedDuringPrewarm.clear();
-        isDatabaseCachePrewarmed = true;
-      } finally {
-        cacheLock.writeLock().unlock();
-      }
-    }
-  }
-
-  public boolean isDatabaseCachePrewarmed() {
-    return isDatabaseCachePrewarmed;
-  }
-
-  public void addDatabaseToCache(Database db) {
-    try {
-      cacheLock.writeLock().lock();
-      Database dbCopy = db.deepCopy();
-      // ObjectStore also stores db name in lowercase
-      dbCopy.setName(dbCopy.getName().toLowerCase());
-      dbCopy.setCatalogName(dbCopy.getCatalogName().toLowerCase());
-      databaseCache.put(CacheUtils.buildDbKey(dbCopy.getCatalogName(), dbCopy.getName()), dbCopy);
-      isDatabaseCacheDirty.set(true);
-    } finally {
-      cacheLock.writeLock().unlock();
-    }
-  }
-
-  public void removeDatabaseFromCache(String catName, String dbName) {
-    try {
-      cacheLock.writeLock().lock();
-      // If db cache is not yet prewarmed, add this to a set which the prewarm thread can check
-      // so that the prewarm thread does not add it back
-      String key = CacheUtils.buildDbKey(catName, dbName);
-      if (!isDatabaseCachePrewarmed) {
-        databasesDeletedDuringPrewarm.add(key);
-      }
-      if (databaseCache.remove(key) != null) {
-        isDatabaseCacheDirty.set(true);
-      }
-    } finally {
-      cacheLock.writeLock().unlock();
-    }
-  }
-
-  public List<String> listCachedDatabases(String catName) {
-    List<String> results = new ArrayList<>();
-    try {
-      cacheLock.readLock().lock();
-      for (String pair : databaseCache.keySet()) {
-        String[] n = CacheUtils.splitDbName(pair);
-        if (catName.equals(n[0])) {
-          results.add(n[1]);
-        }
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-    return results;
-  }
-
-  public List<String> listCachedDatabases(String catName, String pattern) {
-    List<String> results = new ArrayList<>();
-    try {
-      cacheLock.readLock().lock();
-      for (String pair : databaseCache.keySet()) {
-        String[] n = CacheUtils.splitDbName(pair);
-        if (catName.equals(n[0])) {
-          n[1] = StringUtils.normalizeIdentifier(n[1]);
-          if (CacheUtils.matches(n[1], pattern)) {
-            results.add(n[1]);
-          }
-        }
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-    return results;
-  }
-
-  /**
-   * Replaces the old db object with the new one. This will add the new database to cache if it does
-   * not exist.
-   */
-  public void alterDatabaseInCache(String catName, String dbName, Database newDb) {
-    try {
-      cacheLock.writeLock().lock();
-      removeDatabaseFromCache(catName, dbName);
-      addDatabaseToCache(newDb.deepCopy());
-      isDatabaseCacheDirty.set(true);
-    } finally {
-      cacheLock.writeLock().unlock();
-    }
-  }
-
-  public boolean refreshDatabasesInCache(List<Database> databases) {
-    if (isDatabaseCacheDirty.compareAndSet(true, false)) {
-      LOG.debug("Skipping database cache update; the database list we have is dirty.");
-      return false;
-    }
-    try {
-      cacheLock.writeLock().lock();
-      databaseCache.clear();
-      for (Database db : databases) {
-        addDatabaseToCache(db);
-      }
-      return true;
-    } finally {
-      cacheLock.writeLock().unlock();
-    }
-  }
-
-  public int getCachedDatabaseCount() {
-    try {
-      cacheLock.readLock().lock();
-      return databaseCache.size();
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-  }
-
+  // This is called during prewarm
   public boolean populateTableInCache(Table table, ColumnStatistics tableColStats, List<Partition> partitions,
       List<ColumnStatistics> partitionColStats, AggrStats aggrStatsAllPartitions,
-      AggrStats aggrStatsAllButDefaultPartition) {
+      AggrStats aggrStatsAllButDefaultPartition, ValidWriteIdList writeIds) {
     String catName = StringUtils.normalizeIdentifier(table.getCatName());
     String dbName = StringUtils.normalizeIdentifier(table.getDbName());
     String tableName = StringUtils.normalizeIdentifier(table.getTableName());
@@ -1399,7 +1075,7 @@ public class SharedCache {
     if (tablesDeletedDuringPrewarm.contains(CacheUtils.buildTableKey(catName, dbName, tableName))) {
       return false;
     }
-    TableWrapper tblWrapper = createTableWrapper(catName, dbName, tableName, table);
+    TableWrapper tblWrapper = createTableWrapper(catName, dbName, tableName, table, writeIds);
     if (!table.isSetPartitionKeys() && (tableColStats != null)) {
       if (table.getPartitionKeys().isEmpty() && (tableColStats != null)) {
         return false;
@@ -1431,6 +1107,8 @@ public class SharedCache {
     tblWrapper.isTableColStatsCacheDirty.set(false);
     tblWrapper.isPartitionColStatsCacheDirty.set(false);
     tblWrapper.isAggrPartitionColStatsCacheDirty.set(false);
+    tblWrapper.writeIds = writeIds;
+    tblWrapper.valid = true;
     try {
       cacheLock.writeLock().lock();
       // 2. Skip overwriting exisiting table object
@@ -1452,13 +1130,16 @@ public class SharedCache {
     }
   }
 
-  public Table getTableFromCache(String catName, String dbName, String tableName) {
+  public Table getTableFromCache(String catName, String dbName, String tableName, ValidWriteIdList validWriteIdList) {
     Table t = null;
     try {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tableName));
       if (tblWrapper != null) {
-        t = CacheUtils.assemble(tblWrapper, this);
+        // If the request writeIds is newer than the cached version
+        if (tblWrapper.isValid() && TxnIdUtils.compare(validWriteIdList, tblWrapper.getWriteIds()) >= 0) {
+          t = CacheUtils.assemble(tblWrapper, this);
+        }
       }
     } finally {
       cacheLock.readLock().unlock();
@@ -1466,10 +1147,10 @@ public class SharedCache {
     return t;
   }
 
-  public TableWrapper addTableToCache(String catName, String dbName, String tblName, Table tbl) {
+  public TableWrapper addTableToCache(String catName, String dbName, String tblName, Table tbl, ValidWriteIdList writeIds) {
     try {
       cacheLock.writeLock().lock();
-      TableWrapper wrapper = createTableWrapper(catName, dbName, tblName, tbl);
+      TableWrapper wrapper = createTableWrapper(catName, dbName, tblName, tbl, writeIds);
       tableCache.put(CacheUtils.buildTableKey(catName, dbName, tblName), wrapper);
       isTableCacheDirty.set(true);
       return wrapper;
@@ -1478,7 +1159,21 @@ public class SharedCache {
     }
   }
 
-  private TableWrapper createTableWrapper(String catName, String dbName, String tblName, Table tbl) {
+  public void commitWriteId(String catName, String dbName, String tblName, long writeId) {
+    try {
+      cacheLock.readLock().lock();
+      TableWrapper tblWrapper =
+          tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
+      if (tblWrapper != null) {
+        tblWrapper.getWriteIds().commitWriteId(writeId);
+        tblWrapper.setValid(true);
+      }
+    } finally {
+      cacheLock.readLock().unlock();
+    }
+  }
+
+  private TableWrapper createTableWrapper(String catName, String dbName, String tblName, Table tbl, ValidWriteIdList writeIds) {
     TableWrapper wrapper;
     Table tblCopy = tbl.deepCopy();
     tblCopy.setCatName(normalizeIdentifier(catName));
@@ -1494,9 +1189,9 @@ public class SharedCache {
       StorageDescriptor sd = tbl.getSd();
       increSd(sd, sdHash);
       tblCopy.setSd(null);
-      wrapper = new TableWrapper(tblCopy, sdHash, sd.getLocation(), sd.getParameters());
+      wrapper = new TableWrapper(tblCopy, sdHash, sd.getLocation(), sd.getParameters(), writeIds);
     } else {
-      wrapper = new TableWrapper(tblCopy, null, null, null);
+      wrapper = new TableWrapper(tblCopy, null, null, null, writeIds);
     }
     return wrapper;
   }
@@ -1532,6 +1227,7 @@ public class SharedCache {
       cacheLock.writeLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.updateTableObj(newTable, this);
         String newDbName = StringUtils.normalizeIdentifier(newTable.getDbName());
         String newTblName = StringUtils.normalizeIdentifier(newTable.getTableName());
@@ -1552,6 +1248,7 @@ public class SharedCache {
         LOG.info("Table " + tblName + " is missing from cache. Cannot update table stats in cache");
         return;
       }
+      tblWrapper.valid = false;
       Table newTable = tblWrapper.getTable();
       newTable.setWriteId(writeId);
       newTable.setParameters(newParams);
@@ -1596,75 +1293,6 @@ public class SharedCache {
     return tableNames;
   }
 
-  public List<String> listCachedTableNames(String catName, String dbName, String pattern, int maxTables) {
-    List<String> tableNames = new ArrayList<>();
-    try {
-      cacheLock.readLock().lock();
-      int count = 0;
-      for (TableWrapper wrapper : tableCache.asMap().values()) {
-        if (wrapper.sameDatabase(catName, dbName) && CacheUtils.matches(wrapper.getTable().getTableName(), pattern) && (
-            maxTables == -1 || count < maxTables)) {
-          tableNames.add(StringUtils.normalizeIdentifier(wrapper.getTable().getTableName()));
-          count++;
-        }
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-    return tableNames;
-  }
-
-  public List<String> listCachedTableNames(String catName, String dbName, String pattern, TableType tableType,
-      int limit) {
-    List<String> tableNames = new ArrayList<>();
-    try {
-      cacheLock.readLock().lock();
-      int count = 0;
-      for (TableWrapper wrapper : tableCache.asMap().values()) {
-        if (wrapper.sameDatabase(catName, dbName) && CacheUtils.matches(wrapper.getTable().getTableName(), pattern)
-            && wrapper.getTable().getTableType().equals(tableType.toString()) && (limit == -1 || count < limit)) {
-          tableNames.add(StringUtils.normalizeIdentifier(wrapper.getTable().getTableName()));
-          count++;
-        }
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-    return tableNames;
-  }
-
-  public boolean refreshTablesInCache(String catName, String dbName, List<Table> tables) {
-    if (isTableCacheDirty.compareAndSet(true, false)) {
-      LOG.debug("Skipping table cache update; the table list we have is dirty.");
-      return false;
-    }
-    Map<String, TableWrapper> newCacheForDB = new TreeMap<>();
-    for (Table tbl : tables) {
-      String tblName = StringUtils.normalizeIdentifier(tbl.getTableName());
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
-      if (tblWrapper != null) {
-        tblWrapper.updateTableObj(tbl, this);
-      } else {
-        tblWrapper = createTableWrapper(catName, dbName, tblName, tbl);
-      }
-      newCacheForDB.put(CacheUtils.buildTableKey(catName, dbName, tblName), tblWrapper);
-    }
-    try {
-      cacheLock.writeLock().lock();
-      Iterator<Entry<String, TableWrapper>> entryIterator = tableCache.asMap().entrySet().iterator();
-      while (entryIterator.hasNext()) {
-        String key = entryIterator.next().getKey();
-        if (key.startsWith(CacheUtils.buildDbKeyWithDelimiterSuffix(catName, dbName))) {
-          entryIterator.remove();
-        }
-      }
-      tableCache.putAll(newCacheForDB);
-      return true;
-    } finally {
-      cacheLock.writeLock().unlock();
-    }
-  }
-
   public ColumnStatistics getTableColStatsFromCache(String catName, String dbName, String tblName,
       List<String> colNames, String validWriteIds, boolean areTxnStatsSupported) throws MetaException {
     try {
@@ -1686,21 +1314,8 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.removeTableColStats(colName);
-      } else {
-        LOG.info("Table " + tblName + " is missing from cache.");
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-  }
-
-  public void removeAllTableColStatsFromCache(String catName, String dbName, String tblName) {
-    try {
-      cacheLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
-      if (tblWrapper != null) {
-        tblWrapper.removeAllTableColStats();
       } else {
         LOG.info("Table " + tblName + " is missing from cache.");
       }
@@ -1715,22 +1330,8 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tableName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.updateTableColStats(colStatsForTable);
-      } else {
-        LOG.info("Table " + tableName + " is missing from cache.");
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-  }
-
-  public void refreshTableColStatsInCache(String catName, String dbName, String tableName,
-      List<ColumnStatisticsObj> colStatsForTable) {
-    try {
-      cacheLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tableName));
-      if (tblWrapper != null) {
-        tblWrapper.refreshTableColStats(colStatsForTable);
       } else {
         LOG.info("Table " + tableName + " is missing from cache.");
       }
@@ -1748,36 +1349,13 @@ public class SharedCache {
     }
   }
 
-  public List<TableMeta> getTableMeta(String catName, String dbNames, String tableNames, List<String> tableTypes) {
-    List<TableMeta> tableMetas = new ArrayList<>();
-    try {
-      cacheLock.readLock().lock();
-      for (String dbName : listCachedDatabases(catName)) {
-        if (CacheUtils.matches(dbName, dbNames)) {
-          for (Table table : listCachedTables(catName, dbName)) {
-            if (CacheUtils.matches(table.getTableName(), tableNames)) {
-              if (tableTypes == null || tableTypes.contains(table.getTableType())) {
-                TableMeta metaData = new TableMeta(dbName, table.getTableName(), table.getTableType());
-                metaData.setCatName(catName);
-                metaData.setComments(table.getParameters().get("comment"));
-                tableMetas.add(metaData);
-              }
-            }
-          }
-        }
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-    return tableMetas;
-  }
-
   public void addPartitionToCache(String catName, String dbName, String tblName, Partition part) {
     try {
       cacheLock.readLock().lock();
       String tblKey = CacheUtils.buildTableKey(catName, dbName, tblName);
       TableWrapper tblWrapper = tableCache.getIfPresent(tblKey);
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.cachePartition(part, this);
       }
     } finally {
@@ -1790,6 +1368,7 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.cachePartitions(parts, this, false);
       }
     } finally {
@@ -1802,9 +1381,7 @@ public class SharedCache {
     try {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
-      if (tblWrapper != null) {
-        part = tblWrapper.getPartition(partVals, this);
-      }
+      part = tblWrapper.getPartition(partVals, this);
     } finally {
       cacheLock.readLock().unlock();
     }
@@ -1831,6 +1408,7 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         part = tblWrapper.removePartition(partVals, this);
       } else {
         LOG.warn("This is abnormal");
@@ -1846,6 +1424,7 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.removePartitions(partVals, this);
       }
     } finally {
@@ -1873,6 +1452,7 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.alterPartition(partVals, newPart, this);
       }
     } finally {
@@ -1886,6 +1466,7 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.alterPartitionAndStats(partVals, this, writeId, parameters, colStatsObjs);
       }
     } finally {
@@ -1899,19 +1480,8 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.alterPartitions(partValsList, newParts, this);
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-  }
-
-  public void refreshPartitionsInCache(String catName, String dbName, String tblName, List<Partition> partitions) {
-    try {
-      cacheLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
-      if (tblWrapper != null) {
-        tblWrapper.refreshPartitions(partitions, this);
       }
     } finally {
       cacheLock.readLock().unlock();
@@ -1924,19 +1494,8 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.removePartitionColStats(partVals, colName);
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
-  }
-
-  public void removeAllPartitionColStatsFromCache(String catName, String dbName, String tblName) {
-    try {
-      cacheLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
-      if (tblWrapper != null) {
-        tblWrapper.removeAllPartitionColStats();
       }
     } finally {
       cacheLock.readLock().unlock();
@@ -1949,6 +1508,7 @@ public class SharedCache {
       cacheLock.readLock().lock();
       TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tableName));
       if (tblWrapper != null) {
+        tblWrapper.valid = false;
         tblWrapper.updatePartitionColStats(partVals, colStatsObjs);
       }
     } finally {
@@ -1986,19 +1546,6 @@ public class SharedCache {
       cacheLock.readLock().unlock();
     }
     return colStatObjs;
-  }
-
-  public void refreshPartitionColStatsInCache(String catName, String dbName, String tblName,
-      List<ColumnStatistics> partitionColStats) {
-    try {
-      cacheLock.readLock().lock();
-      TableWrapper tblWrapper = tableCache.getIfPresent(CacheUtils.buildTableKey(catName, dbName, tblName));
-      if (tblWrapper != null) {
-        tblWrapper.refreshPartitionColStats(partitionColStats);
-      }
-    } finally {
-      cacheLock.readLock().unlock();
-    }
   }
 
   public List<ColumnStatisticsObj> getAggrStatsFromCache(String catName, String dbName, String tblName,
@@ -2070,11 +1617,6 @@ public class SharedCache {
   }
 
   @VisibleForTesting
-  Map<String, Database> getDatabaseCache() {
-    return databaseCache;
-  }
-
-  @VisibleForTesting
   void clearTableCache() {
     tableCache.invalidateAll();
   }
@@ -2084,19 +1626,7 @@ public class SharedCache {
     return sdCache;
   }
 
-  /**
-   * This resets the contents of the cataog cache so that we can re-fill it in another test.
-   */
-  void resetCatalogCache() {
-    isCatalogCachePrewarmed = false;
-    catalogCache.clear();
-    catalogsDeletedDuringPrewarm.clear();
-    isCatalogCacheDirty.set(false);
-  }
-
   void clearDirtyFlags() {
-    isCatalogCacheDirty.set(false);
-    isDatabaseCacheDirty.set(false);
     isTableCacheDirty.set(false);
   }
 

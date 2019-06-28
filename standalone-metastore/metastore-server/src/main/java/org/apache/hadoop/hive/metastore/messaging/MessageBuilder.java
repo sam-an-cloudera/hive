@@ -289,9 +289,9 @@ public class MessageBuilder {
   public JSONUpdateTableColumnStatMessage buildUpdateTableColumnStatMessage(ColumnStatistics colStats,
                                                                             Table tableObj,
                                                                             Map<String, String> parameters,
-                                                                            long writeId) {
+                                                                            long writeId, String writeIds) {
     return new JSONUpdateTableColumnStatMessage(MS_SERVER_URL, MS_SERVICE_PRINCIPAL, now(),
-            colStats, tableObj, parameters, writeId);
+            colStats, tableObj, parameters, writeId, writeIds);
   }
 
   public JSONDeleteTableColumnStatMessage buildDeleteTableColumnStatMessage(String dbName, String colName) {
@@ -300,9 +300,9 @@ public class MessageBuilder {
 
   public JSONUpdatePartitionColumnStatMessage buildUpdatePartitionColumnStatMessage(ColumnStatistics colStats,
                                                             List<String> partVals, Map<String, String> parameters,
-                                                            Table tableObj, long writeId) {
+                                                            Table tableObj, long writeId, String writeIds) {
     return new JSONUpdatePartitionColumnStatMessage(MS_SERVER_URL, MS_SERVICE_PRINCIPAL, now(), colStats, partVals,
-            parameters, tableObj, writeId);
+            parameters, tableObj, writeId, writeIds);
   }
 
   public JSONDeletePartitionColumnStatMessage buildDeletePartitionColumnStatMessage(String dbName, String colName,

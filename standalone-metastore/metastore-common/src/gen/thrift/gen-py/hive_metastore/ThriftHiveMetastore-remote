@@ -41,10 +41,10 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print('  bool create_type(Type type)')
   print('  bool drop_type(string type)')
   print('   get_type_all(string name)')
-  print('   get_fields(string db_name, string table_name)')
-  print('   get_fields_with_environment_context(string db_name, string table_name, EnvironmentContext environment_context)')
-  print('   get_schema(string db_name, string table_name)')
-  print('   get_schema_with_environment_context(string db_name, string table_name, EnvironmentContext environment_context)')
+  print('   get_fields(string db_name, string table_name, string validWriteIdList)')
+  print('   get_fields_with_environment_context(string db_name, string table_name, EnvironmentContext environment_context, string validWriteIdList)')
+  print('   get_schema(string db_name, string table_name, string validWriteIdList)')
+  print('   get_schema_with_environment_context(string db_name, string table_name, EnvironmentContext environment_context, string validWriteIdList)')
   print('  void create_table(Table tbl)')
   print('  void create_table_with_environment_context(Table tbl, EnvironmentContext environment_context)')
   print('  void create_table_with_constraints(Table tbl,  primaryKeys,  foreignKeys,  uniqueConstraints,  notNullConstraints,  defaultConstraints,  checkConstraints)')
@@ -65,7 +65,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print('   get_materialized_views_for_rewriting(string db_name)')
   print('   get_table_meta(string db_patterns, string tbl_patterns,  tbl_types)')
   print('   get_all_tables(string db_name)')
-  print('  Table get_table(string dbname, string tbl_name)')
+  print('  Table get_table(string dbname, string tbl_name, string validWriteIdList)')
   print('   get_table_objects_by_name(string dbname,  tbl_names)')
   print('   get_tables_ext(GetTablesExtRequest req)')
   print('  GetTableResult get_table_req(GetTableRequest req)')
@@ -91,24 +91,24 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print('  bool drop_partition_by_name(string db_name, string tbl_name, string part_name, bool deleteData)')
   print('  bool drop_partition_by_name_with_environment_context(string db_name, string tbl_name, string part_name, bool deleteData, EnvironmentContext environment_context)')
   print('  DropPartitionsResult drop_partitions_req(DropPartitionsRequest req)')
-  print('  Partition get_partition(string db_name, string tbl_name,  part_vals)')
+  print('  Partition get_partition(string db_name, string tbl_name,  part_vals, string validTxnList)')
   print('  Partition exchange_partition( partitionSpecs, string source_db, string source_table_name, string dest_db, string dest_table_name)')
   print('   exchange_partitions( partitionSpecs, string source_db, string source_table_name, string dest_db, string dest_table_name)')
-  print('  Partition get_partition_with_auth(string db_name, string tbl_name,  part_vals, string user_name,  group_names)')
-  print('  Partition get_partition_by_name(string db_name, string tbl_name, string part_name)')
-  print('   get_partitions(string db_name, string tbl_name, i16 max_parts)')
-  print('   get_partitions_with_auth(string db_name, string tbl_name, i16 max_parts, string user_name,  group_names)')
-  print('   get_partitions_pspec(string db_name, string tbl_name, i32 max_parts)')
-  print('   get_partition_names(string db_name, string tbl_name, i16 max_parts)')
+  print('  Partition get_partition_with_auth(string db_name, string tbl_name,  part_vals, string user_name,  group_names, string validTxnList)')
+  print('  Partition get_partition_by_name(string db_name, string tbl_name, string part_name, string validTxnList)')
+  print('   get_partitions(string db_name, string tbl_name, i16 max_parts, string validTxnList)')
+  print('   get_partitions_with_auth(string db_name, string tbl_name, i16 max_parts, string user_name,  group_names, string validTxnList)')
+  print('   get_partitions_pspec(string db_name, string tbl_name, i32 max_parts, string validTxnList)')
+  print('   get_partition_names(string db_name, string tbl_name, i16 max_parts, string validTxnList)')
   print('  PartitionValuesResponse get_partition_values(PartitionValuesRequest request)')
-  print('   get_partitions_ps(string db_name, string tbl_name,  part_vals, i16 max_parts)')
-  print('   get_partitions_ps_with_auth(string db_name, string tbl_name,  part_vals, i16 max_parts, string user_name,  group_names)')
-  print('   get_partition_names_ps(string db_name, string tbl_name,  part_vals, i16 max_parts)')
-  print('   get_partitions_by_filter(string db_name, string tbl_name, string filter, i16 max_parts)')
-  print('   get_part_specs_by_filter(string db_name, string tbl_name, string filter, i32 max_parts)')
+  print('   get_partitions_ps(string db_name, string tbl_name,  part_vals, i16 max_parts, string validTxnList)')
+  print('   get_partitions_ps_with_auth(string db_name, string tbl_name,  part_vals, i16 max_parts, string user_name,  group_names, string validTxnList)')
+  print('   get_partition_names_ps(string db_name, string tbl_name,  part_vals, i16 max_parts, string validTxnList)')
+  print('   get_partitions_by_filter(string db_name, string tbl_name, string filter, i16 max_parts, string validTxnList)')
+  print('   get_part_specs_by_filter(string db_name, string tbl_name, string filter, i32 max_parts, string validTxnList)')
   print('  PartitionsByExprResult get_partitions_by_expr(PartitionsByExprRequest req)')
-  print('  i32 get_num_partitions_by_filter(string db_name, string tbl_name, string filter)')
-  print('   get_partitions_by_names(string db_name, string tbl_name,  names)')
+  print('  i32 get_num_partitions_by_filter(string db_name, string tbl_name, string filter, string validTxnList)')
+  print('   get_partitions_by_names(string db_name, string tbl_name,  names, string validTxnList)')
   print('  GetPartitionsByNamesResult get_partitions_by_names_req(GetPartitionsByNamesRequest req)')
   print('  void alter_partition(string db_name, string tbl_name, Partition new_part)')
   print('  void alter_partitions(string db_name, string tbl_name,  new_parts)')
@@ -133,8 +133,8 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print('  bool update_partition_column_statistics(ColumnStatistics stats_obj)')
   print('  SetPartitionsStatsResponse update_table_column_statistics_req(SetPartitionsStatsRequest req)')
   print('  SetPartitionsStatsResponse update_partition_column_statistics_req(SetPartitionsStatsRequest req)')
-  print('  ColumnStatistics get_table_column_statistics(string db_name, string tbl_name, string col_name)')
-  print('  ColumnStatistics get_partition_column_statistics(string db_name, string tbl_name, string part_name, string col_name)')
+  print('  ColumnStatistics get_table_column_statistics(string db_name, string tbl_name, string col_name, string validWriteIdList)')
+  print('  ColumnStatistics get_partition_column_statistics(string db_name, string tbl_name, string part_name, string col_name, string validWriteIdList)')
   print('  TableStatsResult get_table_statistics_req(TableStatsRequest request)')
   print('  PartitionsStatsResult get_partitions_statistics_req(PartitionsStatsRequest request)')
   print('  AggrStats get_aggr_stats_for(PartitionsStatsRequest request)')
@@ -421,28 +421,28 @@ elif cmd == 'get_type_all':
   pp.pprint(client.get_type_all(args[0],))
 
 elif cmd == 'get_fields':
-  if len(args) != 2:
-    print('get_fields requires 2 args')
+  if len(args) != 3:
+    print('get_fields requires 3 args')
     sys.exit(1)
-  pp.pprint(client.get_fields(args[0],args[1],))
+  pp.pprint(client.get_fields(args[0],args[1],args[2],))
 
 elif cmd == 'get_fields_with_environment_context':
-  if len(args) != 3:
-    print('get_fields_with_environment_context requires 3 args')
+  if len(args) != 4:
+    print('get_fields_with_environment_context requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_fields_with_environment_context(args[0],args[1],eval(args[2]),))
+  pp.pprint(client.get_fields_with_environment_context(args[0],args[1],eval(args[2]),args[3],))
 
 elif cmd == 'get_schema':
-  if len(args) != 2:
-    print('get_schema requires 2 args')
+  if len(args) != 3:
+    print('get_schema requires 3 args')
     sys.exit(1)
-  pp.pprint(client.get_schema(args[0],args[1],))
+  pp.pprint(client.get_schema(args[0],args[1],args[2],))
 
 elif cmd == 'get_schema_with_environment_context':
-  if len(args) != 3:
-    print('get_schema_with_environment_context requires 3 args')
+  if len(args) != 4:
+    print('get_schema_with_environment_context requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_schema_with_environment_context(args[0],args[1],eval(args[2]),))
+  pp.pprint(client.get_schema_with_environment_context(args[0],args[1],eval(args[2]),args[3],))
 
 elif cmd == 'create_table':
   if len(args) != 1:
@@ -565,10 +565,10 @@ elif cmd == 'get_all_tables':
   pp.pprint(client.get_all_tables(args[0],))
 
 elif cmd == 'get_table':
-  if len(args) != 2:
-    print('get_table requires 2 args')
+  if len(args) != 3:
+    print('get_table requires 3 args')
     sys.exit(1)
-  pp.pprint(client.get_table(args[0],args[1],))
+  pp.pprint(client.get_table(args[0],args[1],args[2],))
 
 elif cmd == 'get_table_objects_by_name':
   if len(args) != 2:
@@ -721,10 +721,10 @@ elif cmd == 'drop_partitions_req':
   pp.pprint(client.drop_partitions_req(eval(args[0]),))
 
 elif cmd == 'get_partition':
-  if len(args) != 3:
-    print('get_partition requires 3 args')
+  if len(args) != 4:
+    print('get_partition requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_partition(args[0],args[1],eval(args[2]),))
+  pp.pprint(client.get_partition(args[0],args[1],eval(args[2]),args[3],))
 
 elif cmd == 'exchange_partition':
   if len(args) != 5:
@@ -739,40 +739,40 @@ elif cmd == 'exchange_partitions':
   pp.pprint(client.exchange_partitions(eval(args[0]),args[1],args[2],args[3],args[4],))
 
 elif cmd == 'get_partition_with_auth':
-  if len(args) != 5:
-    print('get_partition_with_auth requires 5 args')
+  if len(args) != 6:
+    print('get_partition_with_auth requires 6 args')
     sys.exit(1)
-  pp.pprint(client.get_partition_with_auth(args[0],args[1],eval(args[2]),args[3],eval(args[4]),))
+  pp.pprint(client.get_partition_with_auth(args[0],args[1],eval(args[2]),args[3],eval(args[4]),args[5],))
 
 elif cmd == 'get_partition_by_name':
-  if len(args) != 3:
-    print('get_partition_by_name requires 3 args')
+  if len(args) != 4:
+    print('get_partition_by_name requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_partition_by_name(args[0],args[1],args[2],))
+  pp.pprint(client.get_partition_by_name(args[0],args[1],args[2],args[3],))
 
 elif cmd == 'get_partitions':
-  if len(args) != 3:
-    print('get_partitions requires 3 args')
+  if len(args) != 4:
+    print('get_partitions requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_partitions(args[0],args[1],eval(args[2]),))
+  pp.pprint(client.get_partitions(args[0],args[1],eval(args[2]),args[3],))
 
 elif cmd == 'get_partitions_with_auth':
-  if len(args) != 5:
-    print('get_partitions_with_auth requires 5 args')
+  if len(args) != 6:
+    print('get_partitions_with_auth requires 6 args')
     sys.exit(1)
-  pp.pprint(client.get_partitions_with_auth(args[0],args[1],eval(args[2]),args[3],eval(args[4]),))
+  pp.pprint(client.get_partitions_with_auth(args[0],args[1],eval(args[2]),args[3],eval(args[4]),args[5],))
 
 elif cmd == 'get_partitions_pspec':
-  if len(args) != 3:
-    print('get_partitions_pspec requires 3 args')
+  if len(args) != 4:
+    print('get_partitions_pspec requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_partitions_pspec(args[0],args[1],eval(args[2]),))
+  pp.pprint(client.get_partitions_pspec(args[0],args[1],eval(args[2]),args[3],))
 
 elif cmd == 'get_partition_names':
-  if len(args) != 3:
-    print('get_partition_names requires 3 args')
+  if len(args) != 4:
+    print('get_partition_names requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_partition_names(args[0],args[1],eval(args[2]),))
+  pp.pprint(client.get_partition_names(args[0],args[1],eval(args[2]),args[3],))
 
 elif cmd == 'get_partition_values':
   if len(args) != 1:
@@ -781,34 +781,34 @@ elif cmd == 'get_partition_values':
   pp.pprint(client.get_partition_values(eval(args[0]),))
 
 elif cmd == 'get_partitions_ps':
-  if len(args) != 4:
-    print('get_partitions_ps requires 4 args')
+  if len(args) != 5:
+    print('get_partitions_ps requires 5 args')
     sys.exit(1)
-  pp.pprint(client.get_partitions_ps(args[0],args[1],eval(args[2]),eval(args[3]),))
+  pp.pprint(client.get_partitions_ps(args[0],args[1],eval(args[2]),eval(args[3]),args[4],))
 
 elif cmd == 'get_partitions_ps_with_auth':
-  if len(args) != 6:
-    print('get_partitions_ps_with_auth requires 6 args')
+  if len(args) != 7:
+    print('get_partitions_ps_with_auth requires 7 args')
     sys.exit(1)
-  pp.pprint(client.get_partitions_ps_with_auth(args[0],args[1],eval(args[2]),eval(args[3]),args[4],eval(args[5]),))
+  pp.pprint(client.get_partitions_ps_with_auth(args[0],args[1],eval(args[2]),eval(args[3]),args[4],eval(args[5]),args[6],))
 
 elif cmd == 'get_partition_names_ps':
-  if len(args) != 4:
-    print('get_partition_names_ps requires 4 args')
+  if len(args) != 5:
+    print('get_partition_names_ps requires 5 args')
     sys.exit(1)
-  pp.pprint(client.get_partition_names_ps(args[0],args[1],eval(args[2]),eval(args[3]),))
+  pp.pprint(client.get_partition_names_ps(args[0],args[1],eval(args[2]),eval(args[3]),args[4],))
 
 elif cmd == 'get_partitions_by_filter':
-  if len(args) != 4:
-    print('get_partitions_by_filter requires 4 args')
+  if len(args) != 5:
+    print('get_partitions_by_filter requires 5 args')
     sys.exit(1)
-  pp.pprint(client.get_partitions_by_filter(args[0],args[1],args[2],eval(args[3]),))
+  pp.pprint(client.get_partitions_by_filter(args[0],args[1],args[2],eval(args[3]),args[4],))
 
 elif cmd == 'get_part_specs_by_filter':
-  if len(args) != 4:
-    print('get_part_specs_by_filter requires 4 args')
+  if len(args) != 5:
+    print('get_part_specs_by_filter requires 5 args')
     sys.exit(1)
-  pp.pprint(client.get_part_specs_by_filter(args[0],args[1],args[2],eval(args[3]),))
+  pp.pprint(client.get_part_specs_by_filter(args[0],args[1],args[2],eval(args[3]),args[4],))
 
 elif cmd == 'get_partitions_by_expr':
   if len(args) != 1:
@@ -817,16 +817,16 @@ elif cmd == 'get_partitions_by_expr':
   pp.pprint(client.get_partitions_by_expr(eval(args[0]),))
 
 elif cmd == 'get_num_partitions_by_filter':
-  if len(args) != 3:
-    print('get_num_partitions_by_filter requires 3 args')
+  if len(args) != 4:
+    print('get_num_partitions_by_filter requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_num_partitions_by_filter(args[0],args[1],args[2],))
+  pp.pprint(client.get_num_partitions_by_filter(args[0],args[1],args[2],args[3],))
 
 elif cmd == 'get_partitions_by_names':
-  if len(args) != 3:
-    print('get_partitions_by_names requires 3 args')
+  if len(args) != 4:
+    print('get_partitions_by_names requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_partitions_by_names(args[0],args[1],eval(args[2]),))
+  pp.pprint(client.get_partitions_by_names(args[0],args[1],eval(args[2]),args[3],))
 
 elif cmd == 'get_partitions_by_names_req':
   if len(args) != 1:
@@ -973,16 +973,16 @@ elif cmd == 'update_partition_column_statistics_req':
   pp.pprint(client.update_partition_column_statistics_req(eval(args[0]),))
 
 elif cmd == 'get_table_column_statistics':
-  if len(args) != 3:
-    print('get_table_column_statistics requires 3 args')
+  if len(args) != 4:
+    print('get_table_column_statistics requires 4 args')
     sys.exit(1)
-  pp.pprint(client.get_table_column_statistics(args[0],args[1],args[2],))
+  pp.pprint(client.get_table_column_statistics(args[0],args[1],args[2],args[3],))
 
 elif cmd == 'get_partition_column_statistics':
-  if len(args) != 4:
-    print('get_partition_column_statistics requires 4 args')
+  if len(args) != 5:
+    print('get_partition_column_statistics requires 5 args')
     sys.exit(1)
-  pp.pprint(client.get_partition_column_statistics(args[0],args[1],args[2],args[3],))
+  pp.pprint(client.get_partition_column_statistics(args[0],args[1],args[2],args[3],args[4],))
 
 elif cmd == 'get_table_statistics_req':
   if len(args) != 1:

@@ -39,6 +39,7 @@ public class UpdatePartitionColumnStatEvent extends ListenerEvent {
   private Map<String, String> parameters;
   private List<String> partVals;
   private Table tableObj;
+  private String writeIds;
 
   /**
    * @param statsObj Columns statistics Info.
@@ -49,13 +50,14 @@ public class UpdatePartitionColumnStatEvent extends ListenerEvent {
    * @param handler handler that is firing the event
    */
   public UpdatePartitionColumnStatEvent(ColumnStatistics statsObj, List<String> partVals, Map<String, String> parameters,
-                                        Table tableObj, long writeId, IHMSHandler handler) {
+                                        Table tableObj, long writeId, String writeIds, IHMSHandler handler) {
     super(true, handler);
     this.partColStats = statsObj;
     this.writeId = writeId;
     this.parameters = parameters;
     this.partVals = partVals;
     this.tableObj = tableObj;
+    this.writeIds = writeIds;
   }
 
   /**
@@ -64,13 +66,14 @@ public class UpdatePartitionColumnStatEvent extends ListenerEvent {
    * @param handler handler that is firing the event
    */
   public UpdatePartitionColumnStatEvent(ColumnStatistics statsObj, List<String> partVals,
-                                        Table tableObj, IHMSHandler handler) {
+                                        Table tableObj, String writeIds, IHMSHandler handler) {
     super(true, handler);
     this.partColStats = statsObj;
     this.partVals = partVals;
     this.writeId = 0;
     this.parameters = null;
     this.tableObj = tableObj;
+    this.writeIds = writeIds;
   }
 
   public ColumnStatistics getPartColStats() {
@@ -90,4 +93,9 @@ public class UpdatePartitionColumnStatEvent extends ListenerEvent {
   }
 
   public Table getTableObj() { return tableObj; }
+
+  public String getWriteIds()
+  {
+    return writeIds;
+  }
 }

@@ -19,6 +19,7 @@ package org.apache.hadoop.hive.metastore.cache;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.common.TableName;
+import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
+import org.apache.hadoop.hive.common.ValidWriteIdList;
 import org.apache.hadoop.hive.common.ndv.hll.HyperLogLog;
 import org.apache.hadoop.hive.metastore.Deadline;
 import org.apache.hadoop.hive.metastore.HiveMetaStore;
@@ -164,7 +168,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     List<String> allDatabases = cachedStore.getAllDatabases(DEFAULT_CATALOG_NAME);
     Assert.assertEquals(2, allDatabases.size());
     Assert.assertTrue(allDatabases.contains(db1.getName()));
@@ -179,19 +183,23 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     Assert.assertTrue(db2Tables.contains(db2Ptbl1.getTableName()));
     // cs_db1_ptntbl1
     List<Partition> db1Ptbl1Partitions =
-        cachedStore.getPartitions(DEFAULT_CATALOG_NAME, db1.getName(), db1Ptbl1.getTableName(), -1);
+        cachedStore.getPartitions(DEFAULT_CATALOG_NAME, db1.getName(), db1Ptbl1.getTableName(), -1,
+            fromCache(db1.getName(), db1Ptbl1.getTableName()).toString());
     Assert.assertEquals(25, db1Ptbl1Partitions.size());
     Deadline.startTimer("");
     List<Partition> db1Ptbl1PartitionsOS =
-        objectStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db1Ptbl1.getTableName(), -1);
+        objectStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db1Ptbl1.getTableName(), -1,
+            fromCache(db2.getName(), db1Ptbl1.getTableName()).toString());
     Assert.assertTrue(db1Ptbl1Partitions.containsAll(db1Ptbl1PartitionsOS));
     // cs_db2_ptntbl1
     List<Partition> db2Ptbl1Partitions =
-        cachedStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db2Ptbl1.getTableName(), -1);
+        cachedStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db2Ptbl1.getTableName(), -1,
+            fromCache(db2.getName(), db2Ptbl1.getTableName()).toString());
     Assert.assertEquals(25, db2Ptbl1Partitions.size());
     Deadline.startTimer("");
     List<Partition> db2Ptbl1PartitionsOS =
-        objectStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db2Ptbl1.getTableName(), -1);
+        objectStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db2Ptbl1.getTableName(), -1,
+            fromCache(db2.getName(), db2Ptbl1.getTableName()).toString());
     Assert.assertTrue(db2Ptbl1Partitions.containsAll(db2Ptbl1PartitionsOS));
     cachedStore.shutdown();
   }
@@ -209,7 +217,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     SharedCache sharedCache = CachedStore.getSharedCache();
     // cachedStore.getAllTables falls back to objectStore when whitelist/blacklist is set
     List<String> db1Tables = sharedCache.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
@@ -232,7 +240,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     SharedCache sharedCache = CachedStore.getSharedCache();
     // cachedStore.getAllTables falls back to objectStore when whitelist/blacklist is set
     List<String> db1Tables = sharedCache.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
@@ -256,94 +264,12 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     SharedCache sharedCache = CachedStore.getSharedCache();
     List<String> db1Tables = sharedCache.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(2, db1Tables.size());
     List<String> db2Tables = sharedCache.listCachedTableNames(DEFAULT_CATALOG_NAME, db2.getName());
     Assert.assertEquals(0, db2Tables.size());
-    cachedStore.shutdown();
-  }
-
-  @Test public void testCacheUpdate() throws Exception {
-    Configuration conf = MetastoreConf.newMetastoreConf();
-    MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
-    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
-    MetaStoreTestUtils.setConfForStandloneMode(conf);
-    CachedStore cachedStore = new CachedStore();
-    CachedStore.clearSharedCache();
-    cachedStore.setConfForTest(conf);
-    ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
-    // Prewarm CachedStore
-    CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
-    // Drop basedb1's unpartitioned table
-    objectStore.dropTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
-    Deadline.startTimer("");
-    // Drop a partitions of basedb1's partitioned table
-    objectStore.dropPartitions(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName(), db1Ptbl1PtnNames);
-    // Update SharedCache
-    updateCache(cachedStore);
-    List<String> allDatabases = cachedStore.getAllDatabases(DEFAULT_CATALOG_NAME);
-    Assert.assertEquals(2, allDatabases.size());
-    Assert.assertTrue(allDatabases.contains(db1.getName()));
-    Assert.assertTrue(allDatabases.contains(db2.getName()));
-    // cs_db1_ptntbl1
-    List<String> db1Tbls = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
-    Assert.assertEquals(1, db1Tbls.size());
-    Assert.assertTrue(db1Tbls.contains(db1Ptbl1.getTableName()));
-    List<Partition> db1Ptns =
-        cachedStore.getPartitions(DEFAULT_CATALOG_NAME, db1.getName(), db1Ptbl1.getTableName(), -1);
-    Assert.assertEquals(0, db1Ptns.size());
-    // cs_db2_ptntbl1
-    List<String> db2Tbls = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
-    Assert.assertEquals(2, db2Tbls.size());
-    Assert.assertTrue(db2Tbls.contains(db2Utbl1.getTableName()));
-    Assert.assertTrue(db2Tbls.contains(db2Ptbl1.getTableName()));
-    List<Partition> db2Ptns =
-        cachedStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db2Ptbl1.getTableName(), -1);
-    Assert.assertEquals(25, db2Ptns.size());
-    Deadline.startTimer("");
-    List<Partition> db2PtnsOS =
-        objectStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db2Ptbl1.getTableName(), -1);
-    Assert.assertTrue(db2Ptns.containsAll(db2PtnsOS));
-    // Create a new unpartitioned table under basedb1 
-    Table db1Utbl2 = createUnpartitionedTableObject(db1);
-    db1Utbl2.setTableName(db1.getName() + "_unptntbl2");
-    objectStore.createTable(db1Utbl2);
-    // Add a new partition to db1PartitionedTable
-    // Create partitions for cs_db1's partitioned table
-    db1Ptbl1Ptns = createPartitionObjects(db1Ptbl1).getPartitions();
-    Deadline.startTimer("");
-    objectStore.addPartition(db1Ptbl1Ptns.get(0));
-    objectStore.addPartition(db1Ptbl1Ptns.get(1));
-    objectStore.addPartition(db1Ptbl1Ptns.get(2));
-    objectStore.addPartition(db1Ptbl1Ptns.get(3));
-    objectStore.addPartition(db1Ptbl1Ptns.get(4));
-    updateCache(cachedStore);
-    allDatabases = cachedStore.getAllDatabases(DEFAULT_CATALOG_NAME);
-    Assert.assertEquals(2, allDatabases.size());
-    Assert.assertTrue(allDatabases.contains(db1.getName()));
-    Assert.assertTrue(allDatabases.contains(db2.getName()));
-    db1Tbls = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
-    Assert.assertEquals(2, db1Tbls.size());
-    Assert.assertTrue(db1Tbls.contains(db1Ptbl1.getTableName()));
-    Assert.assertTrue(db1Tbls.contains(db1Utbl2.getTableName()));
-    db2Tbls = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
-    Assert.assertEquals(2, db2Tbls.size());
-    Assert.assertTrue(db2Tbls.contains(db2Utbl1.getTableName()));
-    Assert.assertTrue(db2Tbls.contains(db2Ptbl1.getTableName()));
-    // cs_db1_ptntbl1
-    db1Ptns = cachedStore.getPartitions(DEFAULT_CATALOG_NAME, db1.getName(), db1Ptbl1.getTableName(), -1);
-    Assert.assertEquals(5, db1Ptns.size());
-    // cs_db2_ptntbl1
-    db2Ptns = cachedStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db2Ptbl1.getTableName(), -1);
-    Assert.assertEquals(25, db2Ptns.size());
-    Deadline.startTimer("");
-    db2PtnsOS = objectStore.getPartitions(DEFAULT_CATALOG_NAME, db2.getName(), db2Ptbl1.getTableName(), -1);
-    Assert.assertTrue(db2Ptns.containsAll(db2PtnsOS));
-    // Clean up
-    objectStore.dropTable(DEFAULT_CATALOG_NAME, db1Utbl2.getDbName(), db1Utbl2.getTableName());
     cachedStore.shutdown();
   }
 
@@ -364,7 +290,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     db = objectStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     // Read database via CachedStore
     Database dbRead = cachedStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
     Assert.assertEquals(db, dbRead);
@@ -403,7 +329,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     db = objectStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     // Read database via CachedStore
     Database dbRead = cachedStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
     Assert.assertEquals(db, dbRead);
@@ -424,11 +350,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     Assert.assertEquals(localDb1, dbRead);
     allDatabases = cachedStore.getAllDatabases(DEFAULT_CATALOG_NAME);
     Assert.assertEquals(3, allDatabases.size());
-    objectStore.dropDatabase(DEFAULT_CATALOG_NAME, dbName1);
-    updateCache(cachedStore);
-    updateCache(cachedStore);
-    allDatabases = cachedStore.getAllDatabases(DEFAULT_CATALOG_NAME);
-    Assert.assertEquals(2, allDatabases.size());
+    cachedStore.dropDatabase(DEFAULT_CATALOG_NAME, dbName1);
     cachedStore.shutdown();
   }
 
@@ -443,7 +365,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     // Read database via CachedStore
     List<String> allDatabases = cachedStore.getAllDatabases(DEFAULT_CATALOG_NAME);
     Assert.assertEquals(2, allDatabases.size());
@@ -456,17 +378,6 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     db = cachedStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
     // Read db via ObjectStore
     Database dbRead = objectStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
-    Assert.assertEquals(db, dbRead);
-    // Alter db via ObjectStore
-    dbOwner = "user3";
-    db = new Database(db1);
-    db.setOwnerName(dbOwner);
-    objectStore.alterDatabase(DEFAULT_CATALOG_NAME, dbName, db);
-    db = objectStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
-    updateCache(cachedStore);
-    updateCache(cachedStore);
-    // Read db via CachedStore
-    dbRead = cachedStore.getDatabase(DEFAULT_CATALOG_NAME, dbName);
     Assert.assertEquals(db, dbRead);
     cachedStore.shutdown();
   }
@@ -482,7 +393,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     // Read database via CachedStore
     List<String> allDatabases = cachedStore.getAllDatabases(DEFAULT_CATALOG_NAME);
     Assert.assertEquals(2, allDatabases.size());
@@ -497,23 +408,14 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     cachedStore.createTable(db1Utbl2);
     db1Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(3, db1Tables.size());
-    db1Utbl2 = cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl2.getDbName(), db1Utbl2.getTableName());
-    Table tblRead = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl2.getDbName(), db1Utbl2.getTableName());
+    db1Utbl2 = cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl2.getDbName(), db1Utbl2.getTableName(),
+        fromCache(db1Utbl2.getDbName(), db1Utbl2.getTableName()).toString());
+    Table tblRead = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl2.getDbName(), db1Utbl2.getTableName(),
+        fromCache(db1Utbl2.getDbName(), db1Utbl2.getTableName()).toString());
     Assert.assertEquals(db1Utbl2, tblRead);
-    // Create a new unpartitioned table under basedb2 via ObjectStore
-    Table db2Utbl2 = createUnpartitionedTableObject(db2);
-    db2Utbl2.setTableName(db2.getName() + "_unptntbl2");
-    objectStore.createTable(db2Utbl2);
-    db2Utbl2 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl2.getDbName(), db2Utbl2.getTableName());
-    updateCache(cachedStore);
-    db2Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
-    Assert.assertEquals(3, db2Tables.size());
-    tblRead = cachedStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl2.getDbName(), db2Utbl2.getTableName());
-    Assert.assertEquals(db2Utbl2, tblRead);
-    // Clean up
     objectStore.dropTable(DEFAULT_CATALOG_NAME, db1Utbl2.getDbName(), db1Utbl2.getTableName());
-    db1Utbl2 = cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl2.getDbName(), db1Utbl2.getTableName());
-    objectStore.dropTable(DEFAULT_CATALOG_NAME, db2Utbl2.getDbName(), db2Utbl2.getTableName());
+    db1Utbl2 = cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl2.getDbName(), db1Utbl2.getTableName(),
+        fromCache(db1Utbl2.getDbName(), db1Utbl2.getTableName()).toString());
     cachedStore.shutdown();
   }
 
@@ -530,7 +432,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     SharedCache sharedCache = CachedStore.getSharedCache();
     List<String> db1Tables = sharedCache.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(2, db1Tables.size());
@@ -555,7 +457,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     SharedCache sharedCache = CachedStore.getSharedCache();
     // cachedStore.getAllTables falls back to objectStore when whitelist/blacklist is set
     List<String> db1Tables = sharedCache.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
@@ -580,7 +482,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     SharedCache sharedCache = CachedStore.getSharedCache();
     // cachedStore.getAllTables falls back to objectStore when whitelist/blacklist is set
     List<String> db1Tables = sharedCache.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
@@ -603,7 +505,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     List<String> db1Tables = cachedStore.getTables(DEFAULT_CATALOG_NAME, db1.getName(), "cs_db1.*");
     Assert.assertEquals(2, db1Tables.size());
     db1Tables = cachedStore.getTables(DEFAULT_CATALOG_NAME, db1.getName(), "cs_db1.un*");
@@ -628,35 +530,26 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     List<String> db1Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(2, db1Tables.size());
     List<String> db2Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
     Assert.assertEquals(2, db2Tables.size());
     // Alter table db1Utbl1 via CachedStore and read via ObjectStore
-    Table db1Utbl1Read = cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    Table db1Utbl1Read = cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName(),
+        fromCache(db1Utbl1.getDbName(), db1Utbl1.getTableName()).toString());
     String newOwner = "newOwner";
     Table db1Utbl1ReadAlt = new Table(db1Utbl1Read);
     db1Utbl1ReadAlt.setOwner(newOwner);
     cachedStore
         .alterTable(DEFAULT_CATALOG_NAME, db1Utbl1Read.getDbName(), db1Utbl1Read.getTableName(), db1Utbl1ReadAlt, "0");
     db1Utbl1Read =
-        cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1ReadAlt.getDbName(), db1Utbl1ReadAlt.getTableName());
+        cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1ReadAlt.getDbName(), db1Utbl1ReadAlt.getTableName(),
+            fromCache(db1Utbl1ReadAlt.getDbName(), db1Utbl1ReadAlt.getTableName()).toString());
     Table db1Utbl1ReadOS =
-        objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1ReadAlt.getDbName(), db1Utbl1ReadAlt.getTableName());
+        objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1ReadAlt.getDbName(), db1Utbl1ReadAlt.getTableName(),
+            fromCache(db1Utbl1ReadAlt.getDbName(), db1Utbl1ReadAlt.getTableName()).toString());
     Assert.assertEquals(db1Utbl1Read, db1Utbl1ReadOS);
-    // Alter table db2Utbl1 via ObjectStore and read via CachedStore
-    Table db2Utbl1Read = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
-    Table db2Utbl1ReadAlt = new Table(db2Utbl1Read);
-    db2Utbl1ReadAlt.setOwner(newOwner);
-    objectStore
-        .alterTable(DEFAULT_CATALOG_NAME, db2Utbl1Read.getDbName(), db2Utbl1Read.getTableName(), db2Utbl1ReadAlt, "0");
-    updateCache(cachedStore);
-    db2Utbl1Read =
-        objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1ReadAlt.getDbName(), db2Utbl1ReadAlt.getTableName());
-    Table d21Utbl1ReadCS =
-        cachedStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1ReadAlt.getDbName(), db2Utbl1ReadAlt.getTableName());
-    Assert.assertEquals(db2Utbl1Read, d21Utbl1ReadCS);
     cachedStore.shutdown();
   }
 
@@ -671,65 +564,21 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     ObjectStore objectStore = (ObjectStore) cachedStore.getRawStore();
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
     List<String> db1Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(2, db1Tables.size());
     List<String> db2Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
     Assert.assertEquals(2, db2Tables.size());
     // Drop table db1Utbl1 via CachedStore and read via ObjectStore
-    Table db1Utbl1Read = cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
+    Table db1Utbl1Read = cachedStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName(),
+        fromCache(db1Utbl1.getDbName(), db1Utbl1.getTableName()).toString());
     cachedStore.dropTable(DEFAULT_CATALOG_NAME, db1Utbl1Read.getDbName(), db1Utbl1Read.getTableName());
     db1Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(1, db1Tables.size());
     Table db1Utbl1ReadOS =
-        objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1Read.getDbName(), db1Utbl1Read.getTableName());
+        objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1Read.getDbName(), db1Utbl1Read.getTableName(),
+            fromCache(db1Utbl1Read.getDbName(), db1Utbl1Read.getTableName()).toString());
     Assert.assertNull(db1Utbl1ReadOS);
-    // Drop table db2Utbl1 via ObjectStore and read via CachedStore
-    Table db2Utbl1Read = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
-    objectStore.dropTable(DEFAULT_CATALOG_NAME, db2Utbl1Read.getDbName(), db2Utbl1Read.getTableName());
-    db2Tables = objectStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
-    Assert.assertEquals(1, db2Tables.size());
-    updateCache(cachedStore);
-    db2Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db2.getName());
-    Assert.assertEquals(1, db2Tables.size());
-    Table db2Utbl1ReadCS =
-        cachedStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1Read.getDbName(), db2Utbl1Read.getTableName());
-    Assert.assertNull(db2Utbl1ReadCS);
-    cachedStore.shutdown();
-  }
-
-  /**********************************************************************************************
-   * Methods that test SharedCache
-   * @throws MetaException
-   * @throws NoSuchObjectException
-   *********************************************************************************************/
-
-  @Test public void testSharedStoreDb() throws NoSuchObjectException, MetaException {
-    Configuration conf = MetastoreConf.newMetastoreConf();
-    MetastoreConf.setBoolVar(conf, MetastoreConf.ConfVars.HIVE_IN_TEST, true);
-    MetastoreConf.setVar(conf, MetastoreConf.ConfVars.CACHED_RAW_STORE_MAX_CACHE_MEMORY, "-1Kb");
-    MetaStoreTestUtils.setConfForStandloneMode(conf);
-    CachedStore cachedStore = new CachedStore();
-    CachedStore.clearSharedCache();
-    cachedStore.setConfForTest(conf);
-    SharedCache sharedCache = CachedStore.getSharedCache();
-
-    Database localDb1 = createDatabaseObject("db1", "user1");
-    Database localDb2 = createDatabaseObject("db2", "user1");
-    Database localDb3 = createDatabaseObject("db3", "user1");
-    Database newDb1 = createDatabaseObject("newdb1", "user1");
-    sharedCache.addDatabaseToCache(localDb1);
-    sharedCache.addDatabaseToCache(localDb2);
-    sharedCache.addDatabaseToCache(localDb3);
-    Assert.assertEquals(sharedCache.getCachedDatabaseCount(), 3);
-    sharedCache.alterDatabaseInCache(DEFAULT_CATALOG_NAME, "db1", newDb1);
-    Assert.assertEquals(sharedCache.getCachedDatabaseCount(), 3);
-    sharedCache.removeDatabaseFromCache(DEFAULT_CATALOG_NAME, "db2");
-    Assert.assertEquals(sharedCache.getCachedDatabaseCount(), 2);
-    List<String> dbs = sharedCache.listCachedDatabases(DEFAULT_CATALOG_NAME);
-    Assert.assertEquals(dbs.size(), 2);
-    Assert.assertTrue(dbs.contains("newdb1"));
-    Assert.assertTrue(dbs.contains("db3"));
     cachedStore.shutdown();
   }
 
@@ -793,15 +642,15 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     newTbl1.setSd(newSd1);
     newTbl1.setPartitionKeys(new ArrayList<>());
 
-    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, "db1", "tbl1", tbl1);
-    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, "db1", "tbl2", tbl2);
-    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, "db1", "tbl3", tbl3);
-    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, "db2", "tbl1", tbl1);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, "db1", "tbl1", tbl1, null);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, "db1", "tbl2", tbl2, null);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, "db1", "tbl3", tbl3, null);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, "db2", "tbl1", tbl1, null);
 
     Assert.assertEquals(sharedCache.getCachedTableCount(), 4);
     Assert.assertEquals(sharedCache.getSdCache().size(), 2);
 
-    Table t = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, "db1", "tbl1");
+    Table t = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, "db1", "tbl1", fromCache("db1", "tbl1"));
     Assert.assertEquals(t.getSd().getLocation(), "loc1");
 
     sharedCache.removeTableFromCache(DEFAULT_CATALOG_NAME, "db1", "tbl1");
@@ -831,8 +680,6 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     String tbl1Name = "tbl1";
     String tbl2Name = "tbl2";
     String owner = "user1";
-    Database db = createDatabaseObject(dbName, owner);
-    sharedCache.addDatabaseToCache(db);
     FieldSchema col1 = new FieldSchema("col1", "int", "integer column");
     FieldSchema col2 = new FieldSchema("col2", "string", "string column");
     List<FieldSchema> cols = new ArrayList<FieldSchema>();
@@ -840,9 +687,9 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     cols.add(col2);
     List<FieldSchema> ptnCols = new ArrayList<FieldSchema>();
     Table tbl1 = createTestTbl(dbName, tbl1Name, owner, cols, ptnCols);
-    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, tbl1);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, tbl1, null);
     Table tbl2 = createTestTbl(dbName, tbl2Name, owner, cols, ptnCols);
-    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl2Name, tbl2);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl2Name, tbl2, null);
 
     Partition part1 = new Partition();
     StorageDescriptor sd1 = new StorageDescriptor();
@@ -979,9 +826,11 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     List<String> aggrPartVals = new ArrayList<>();
     aggrPartVals.add("1");
     aggrPartVals.add("2");
-    AggrStats aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames);
+    AggrStats aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames,
+        fromCache(dbName, tblName).toString());
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumNulls(), 100);
-    aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames);
+    aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames,
+        fromCache(dbName, tblName).toString());
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumNulls(), 100);
 
     objectStore.deletePartitionColumnStatistics(DEFAULT_CATALOG_NAME, db.getName(), tbl.getTableName(),
@@ -1064,10 +913,12 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     List<String> aggrPartVals = new ArrayList<>();
     aggrPartVals.add("1");
     aggrPartVals.add("2");
-    AggrStats aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames);
+    AggrStats aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames,
+        fromCache(dbName, tblName).toString());
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumNulls(), 100);
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumDVs(), 40);
-    aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames);
+    aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames,
+        fromCache(dbName, tblName).toString());
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumNulls(), 100);
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumDVs(), 40);
     cachedStore.shutdown();
@@ -1157,10 +1008,12 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     List<String> aggrPartVals = new ArrayList<>();
     aggrPartVals.add("1");
     aggrPartVals.add("2");
-    AggrStats aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames);
+    AggrStats aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames,
+        fromCache(dbName, tblName).toString());
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumNulls(), 100);
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumDVs(), 5);
-    aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames);
+    aggrStats = cachedStore.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tblName, aggrPartVals, colNames,
+        fromCache(dbName, tblName).toString());
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumNulls(), 100);
     Assert.assertEquals(aggrStats.getColStats().get(0).getStatsData().getLongStats().getNumDVs(), 5);
     cachedStore.shutdown();
@@ -1186,24 +1039,6 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
       }
     });
 
-    // Create 5 dbs
-    for (String dbName : dbNames) {
-      Callable<Object> c = new Callable<Object>() {
-        public Object call() {
-          Database db = createDatabaseObject(dbName, "user1");
-          sharedCache.addDatabaseToCache(db);
-          return null;
-        }
-      };
-      tasks.add(c);
-    }
-    executor.invokeAll(tasks);
-    for (String dbName : dbNames) {
-      Database db = sharedCache.getDatabaseFromCache(DEFAULT_CATALOG_NAME, dbName);
-      Assert.assertNotNull(db);
-      Assert.assertEquals(dbName, db.getName());
-    }
-
     // Created 5 tables under "db1"
     List<String> tblNames = new ArrayList<String>(Arrays.asList("tbl1", "tbl2", "tbl3", "tbl4", "tbl5"));
     tasks.clear();
@@ -1219,7 +1054,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
       Callable<Object> c = new Callable<Object>() {
         public Object call() {
           Table tbl = createTestTbl(dbNames.get(0), tblName, "user1", cols, ptnCols);
-          sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbNames.get(0), tblName, tbl);
+          sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbNames.get(0), tblName, tbl, null);
           return null;
         }
       };
@@ -1227,7 +1062,8 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     }
     executor.invokeAll(tasks);
     for (String tblName : tblNames) {
-      Table tbl = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbNames.get(0), tblName);
+      Table tbl = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbNames.get(0), tblName,
+          fromCache(dbNames.get(0), tblName));
       Assert.assertNotNull(tbl);
       Assert.assertEquals(tblName, tbl.getTableName());
     }
@@ -1236,7 +1072,8 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     List<String> ptnVals = new ArrayList<String>(Arrays.asList("aaa", "bbb", "ccc", "ddd", "eee"));
     tasks.clear();
     for (String tblName : tblNames) {
-      Table tbl = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbNames.get(0), tblName);
+      Table tbl = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbNames.get(0), tblName,
+          fromCache(dbNames.get(0), tblName));
       for (String ptnVal : ptnVals) {
         Map<String, String> partParams = new HashMap<String, String>();
         Callable<Object> c = new Callable<Object>() {
@@ -1279,7 +1116,8 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
       }
     }
     for (String tblName : addPtnTblNames) {
-      Table tbl = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbNames.get(0), tblName);
+      Table tbl = sharedCache.getTableFromCache(DEFAULT_CATALOG_NAME, dbNames.get(0), tblName,
+          fromCache(dbNames.get(0), tblName));
       for (String ptnVal : newPtnVals) {
         Map<String, String> partParams = new HashMap<String, String>();
         Callable<Object> c = new Callable<Object>() {
@@ -1396,9 +1234,8 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     sharedCache.setTableSizeMap(tableSizeMap);
     sharedCache.initialize(conf);
 
-    sharedCache.addDatabaseToCache(db);
-    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, tbl1);
-    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl2Name, tbl2);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, tbl1, null);
+    sharedCache.addTableToCache(DEFAULT_CATALOG_NAME, dbName, tbl2Name, tbl2, null);
 
     sharedCache.addPartitionToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, part1);
     sharedCache.addPartitionToCache(DEFAULT_CATALOG_NAME, dbName, tbl1Name, part2);
@@ -1445,7 +1282,7 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
 
     // Prewarm CachedStore
     CachedStore.setCachePrewarmedState(false);
-    CachedStore.prewarm(objectStore);
+    CachedStore.prewarm(objectStore, conf);
 
     List<String> db1Tables = cachedStore.getAllTables(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(2, db1Tables.size());
@@ -1479,22 +1316,20 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     tableSizeMap.put(db1Ptbl1TblKey, 4000);
     tableSizeMap.put(db2Utbl1TblKey, 4000);
     tableSizeMap.put(db2Ptbl1TblKey, 4000);
-    Table tblDb1Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName());
-    Table tblDb1Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName());
-    Table tblDb2Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName());
-    Table tblDb2Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName());
+    Table tblDb1Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName(), null);
+    Table tblDb1Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName(), null);
+    Table tblDb2Utbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName(), null);
+    Table tblDb2Ptbl1 = objectStore.getTable(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName(), null);
 
     SharedCache sc = cachedStore.getSharedCache();
     sc.setConcurrencyLevel(1);
     sc.setTableSizeMap(tableSizeMap);
     sc.initialize(conf);
 
-    sc.addDatabaseToCache(db1);
-    sc.addDatabaseToCache(db2);
-    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName(), tblDb1Utbl1);
-    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName(), tblDb1Ptbl1);
-    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName(), tblDb2Utbl1);
-    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName(), tblDb2Ptbl1);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Utbl1.getDbName(), db1Utbl1.getTableName(), tblDb1Utbl1, null);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db1Ptbl1.getDbName(), db1Ptbl1.getTableName(), tblDb1Ptbl1, null);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Utbl1.getDbName(), db2Utbl1.getTableName(), tblDb2Utbl1, null);
+    sc.addTableToCache(DEFAULT_CATALOG_NAME, db2Ptbl1.getDbName(), db2Ptbl1.getTableName(), tblDb2Ptbl1, null);
 
     List<String> db1Tables = sc.listCachedTableNames(DEFAULT_CATALOG_NAME, db1.getName());
     Assert.assertEquals(0, db1Tables.size());
@@ -1781,18 +1616,8 @@ import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_CATALOG_NAME;
     }
   }
 
-  // This method will return only after the cache has updated once
-  private void updateCache(CachedStore cachedStore) throws Exception {
-    int maxTries = 100;
-    long updateCountBefore = cachedStore.getCacheUpdateCount();
-    // Start the CachedStore update service
-    CachedStore.startCacheUpdateService(cachedStore.getConf(), true, false);
-    while ((cachedStore.getCacheUpdateCount() != (updateCountBefore + 1)) && (maxTries-- > 0)) {
-      Thread.sleep(1000);
-    }
-    if (maxTries <= 0) {
-      throw new Exception("Unable to update SharedCache in 100 attempts; possibly some bug");
-    }
-    CachedStore.stopCacheUpdateService(100);
+  public static ValidWriteIdList fromCache(String dbName, String tableName) {
+    String fullTableName = TableName.getDbTable(dbName, tableName);
+    return new ValidReaderWriteIdList(fullTableName, new long[0], new BitSet(), Long.MAX_VALUE);
   }
 }

@@ -199,7 +199,7 @@ public class TestOldSchema {
       partNames.add("ds=" + i);
     }
     AggrStats aggrStats = store.get_aggr_stats_for(DEFAULT_CATALOG_NAME, dbName, tableName, partNames,
-        Arrays.asList("col1"));
+        Arrays.asList("col1"), null);
     statChecker.checkStats(aggrStats);
 
   }
@@ -218,7 +218,7 @@ public class TestOldSchema {
         String db = dbs.get(i);
         List<String> tbls = store.getAllTables(DEFAULT_CATALOG_NAME, db);
         for (String tbl : tbls) {
-          List<Partition> parts = store.getPartitions(DEFAULT_CATALOG_NAME, db, tbl, 100);
+          List<Partition> parts = store.getPartitions(DEFAULT_CATALOG_NAME, db, tbl, 100, null);
           for (Partition part : parts) {
             store.dropPartition(DEFAULT_CATALOG_NAME, db, tbl, part.getValues());
           }

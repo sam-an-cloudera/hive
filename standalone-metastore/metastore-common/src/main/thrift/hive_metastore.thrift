@@ -745,8 +745,9 @@ struct PartitionsByExprRequest {
   2: required string tblName,
   3: required binary expr,
   4: optional string defaultPartitionName,
-  5: optional i16 maxParts=-1
-  6: optional string catName
+  5: optional i16 maxParts=-1,
+  6: optional string catName,
+  7: optional string validWriteIdList
 }
 
 struct TableStatsResult {
@@ -831,7 +832,8 @@ struct PartitionValuesRequest {
   6: optional list<FieldSchema> partitionOrder;
   7: optional bool ascending = true;
   8: optional i64 maxParts = -1;
-  9: optional string catName
+  9: optional string catName,
+  10: optional string validWriteIdList
 }
 
 struct PartitionValuesRow {
@@ -848,7 +850,8 @@ struct GetPartitionsByNamesRequest {
   3: optional list<string> names,
   4: optional bool get_col_stats,
   5: optional list<string> processorCapabilities,
-  6: optional string processorIdentifier
+  6: optional string processorIdentifier,
+  7: optional string validWriteIdList
 }
 
 struct GetPartitionsByNamesResult {
@@ -1005,6 +1008,16 @@ struct TableValidWriteIds {
     3: required list<i64> invalidWriteIds, // List of open and aborted writes ids in the table
     4: optional i64 minOpenWriteId, // Minimum write id which maps to a opened txn
     5: required binary abortedBits, // Bit array to identify the aborted write ids in invalidWriteIds list
+}
+
+struct TableWriteId {
+    1: required string fullTableName,  // Full table name of format <db_name>.<table_name>
+    2: required i64 writeId, // current write id of the table
+}
+
+// Current Write ID for changed tables of the txn
+struct GetTxnTableWriteIdsResponse {
+    1: required list<TableWriteId> tableWriteIds,
 }
 
 // Valid Write ID list for all the input tables wrt to current txn
@@ -1824,7 +1837,8 @@ struct GetPartitionsRequest {
    7: GetPartitionsProjectionSpec projectionSpec
    8: GetPartitionsFilterSpec filterSpec, // TODO not yet implemented. Must be present but ignored
    9: optional list<string> processorCapabilities,
-   10: optional string processorIdentifier
+   10: optional string processorIdentifier,
+   11: optional string validWriteIdList
 }
 
 // Exceptions.
@@ -1919,12 +1933,12 @@ service ThriftHiveMetastore extends fb303.FacebookService
                                 throws(1:MetaException o2)
 
   // Gets a list of FieldSchemas describing the columns of a particular table
-  list<FieldSchema> get_fields(1: string db_name, 2: string table_name) throws (1: MetaException o1, 2: UnknownTableException o2, 3: UnknownDBException o3),
-  list<FieldSchema> get_fields_with_environment_context(1: string db_name, 2: string table_name, 3:EnvironmentContext environment_context) throws (1: MetaException o1, 2: UnknownTableException o2, 3: UnknownDBException o3)
+  list<FieldSchema> get_fields(1: string db_name, 2: string table_name, 3: string validWriteIdList) throws (1: MetaException o1, 2: UnknownTableException o2, 3: UnknownDBException o3),
+  list<FieldSchema> get_fields_with_environment_context(1: string db_name, 2: string table_name, 3: EnvironmentContext environment_context, 4: string validWriteIdList) throws (1: MetaException o1, 2: UnknownTableException o2, 3: UnknownDBException o3)
 
   // Gets a list of FieldSchemas describing both the columns and the partition keys of a particular table
-  list<FieldSchema> get_schema(1: string db_name, 2: string table_name) throws (1: MetaException o1, 2: UnknownTableException o2, 3: UnknownDBException o3)
-  list<FieldSchema> get_schema_with_environment_context(1: string db_name, 2: string table_name, 3:EnvironmentContext environment_context) throws (1: MetaException o1, 2: UnknownTableException o2, 3: UnknownDBException o3)
+  list<FieldSchema> get_schema(1: string db_name, 2: string table_name, 3: string validWriteIdList) throws (1: MetaException o1, 2: UnknownTableException o2, 3: UnknownDBException o3)
+  list<FieldSchema> get_schema_with_environment_context(1: string db_name, 2: string table_name, 3:EnvironmentContext environment_context, 4:string validWriteIdList) throws (1: MetaException o1, 2: UnknownTableException o2, 3: UnknownDBException o3)
 
   // create a Hive table. Following fields must be set
   // tableName
@@ -1980,7 +1994,7 @@ service ThriftHiveMetastore extends fb303.FacebookService
                        throws (1: MetaException o1)
   list<string> get_all_tables(1: string db_name) throws (1: MetaException o1)
 
-  Table get_table(1:string dbname, 2:string tbl_name)
+  Table get_table(1:string dbname, 2:string tbl_name, 3: string validWriteIdList)
                        throws (1:MetaException o1, 2:NoSuchObjectException o2)
   list<Table> get_table_objects_by_name(1:string dbname, 2:list<string> tbl_names)
   list<ExtendedTableInfo> get_tables_ext(1: GetTablesExtRequest req) throws (1: MetaException o1)
@@ -2081,7 +2095,7 @@ service ThriftHiveMetastore extends fb303.FacebookService
   DropPartitionsResult drop_partitions_req(1: DropPartitionsRequest req)
                        throws(1:NoSuchObjectException o1, 2:MetaException o2)
 
-  Partition get_partition(1:string db_name, 2:string tbl_name, 3:list<string> part_vals)
+  Partition get_partition(1:string db_name, 2:string tbl_name, 3:list<string> part_vals, 4:string validTxnList)
                        throws(1:MetaException o1, 2:NoSuchObjectException o2)
   Partition exchange_partition(1:map<string, string> partitionSpecs, 2:string source_db,
       3:string source_table_name, 4:string dest_db, 5:string dest_table_name)
@@ -2094,22 +2108,22 @@ service ThriftHiveMetastore extends fb303.FacebookService
       4:InvalidInputException o4)
 
   Partition get_partition_with_auth(1:string db_name, 2:string tbl_name, 3:list<string> part_vals,
-      4: string user_name, 5: list<string> group_names) throws(1:MetaException o1, 2:NoSuchObjectException o2)
+      4: string user_name, 5: list<string> group_names, 6: string validTxnList) throws(1:MetaException o1, 2:NoSuchObjectException o2)
 
-  Partition get_partition_by_name(1:string db_name 2:string tbl_name, 3:string part_name)
+  Partition get_partition_by_name(1:string db_name 2:string tbl_name, 3:string part_name, 4:string validTxnList)
                        throws(1:MetaException o1, 2:NoSuchObjectException o2)
 
   // returns all the partitions for this table in reverse chronological order.
   // If max parts is given then it will return only that many.
-  list<Partition> get_partitions(1:string db_name, 2:string tbl_name, 3:i16 max_parts=-1)
+  list<Partition> get_partitions(1:string db_name, 2:string tbl_name, 3:i16 max_parts=-1, 4:string validTxnList)
                        throws(1:NoSuchObjectException o1, 2:MetaException o2)
   list<Partition> get_partitions_with_auth(1:string db_name, 2:string tbl_name, 3:i16 max_parts=-1,
-     4: string user_name, 5: list<string> group_names) throws(1:NoSuchObjectException o1, 2:MetaException o2)
+     4: string user_name, 5: list<string> group_names, 6: string validTxnList) throws(1:NoSuchObjectException o1, 2:MetaException o2)
 
-  list<PartitionSpec> get_partitions_pspec(1:string db_name, 2:string tbl_name, 3:i32 max_parts=-1)
+  list<PartitionSpec> get_partitions_pspec(1:string db_name, 2:string tbl_name, 3:i32 max_parts=-1, 4:string validTxnList)
                        throws(1:NoSuchObjectException o1, 2:MetaException o2)
 
-  list<string> get_partition_names(1:string db_name, 2:string tbl_name, 3:i16 max_parts=-1)
+  list<string> get_partition_names(1:string db_name, 2:string tbl_name, 3:i16 max_parts=-1, 4:string validTxnList)
                        throws(1:NoSuchObjectException o1, 2:MetaException o2)
 
   PartitionValuesResponse get_partition_values(1:PartitionValuesRequest request)
@@ -2122,23 +2136,23 @@ service ThriftHiveMetastore extends fb303.FacebookService
   // number of partition columns - the unspecified values are considered the same
   // as "".
   list<Partition> get_partitions_ps(1:string db_name 2:string tbl_name
-  	3:list<string> part_vals, 4:i16 max_parts=-1)
+      3:list<string> part_vals, 4:i16 max_parts=-1, 5:string validTxnList)
                        throws(1:MetaException o1, 2:NoSuchObjectException o2)
   list<Partition> get_partitions_ps_with_auth(1:string db_name, 2:string tbl_name, 3:list<string> part_vals, 4:i16 max_parts=-1,
-     5: string user_name, 6: list<string> group_names) throws(1:NoSuchObjectException o1, 2:MetaException o2)
+      5: string user_name, 6: list<string> group_names, 7: string validTxnList) throws(1:NoSuchObjectException o1, 2:MetaException o2)
 
   list<string> get_partition_names_ps(1:string db_name,
-  	2:string tbl_name, 3:list<string> part_vals, 4:i16 max_parts=-1)
+      2:string tbl_name, 3:list<string> part_vals, 4:i16 max_parts=-1, 5:string validTxnList)
   	                   throws(1:MetaException o1, 2:NoSuchObjectException o2)
 
   // get the partitions matching the given partition filter
   list<Partition> get_partitions_by_filter(1:string db_name 2:string tbl_name
-    3:string filter, 4:i16 max_parts=-1)
+    3:string filter, 4:i16 max_parts=-1, 5:string validTxnList)
                        throws(1:MetaException o1, 2:NoSuchObjectException o2)
 
   // List partitions as PartitionSpec instances.
   list<PartitionSpec> get_part_specs_by_filter(1:string db_name 2:string tbl_name
-    3:string filter, 4:i32 max_parts=-1)
+    3:string filter, 4:i32 max_parts=-1, 5:string validTxnList)
                        throws(1:MetaException o1, 2:NoSuchObjectException o2)
 
   // get the partitions matching the given partition filter
@@ -2148,11 +2162,11 @@ service ThriftHiveMetastore extends fb303.FacebookService
                        throws(1:MetaException o1, 2:NoSuchObjectException o2)
 
   // get the partitions matching the given partition filter
-  i32 get_num_partitions_by_filter(1:string db_name 2:string tbl_name 3:string filter)
+  i32 get_num_partitions_by_filter(1:string db_name 2:string tbl_name 3:string filter 4:string validTxnList)
                        throws(1:MetaException o1, 2:NoSuchObjectException o2)
 
   // get partitions give a list of partition names
-  list<Partition> get_partitions_by_names(1:string db_name 2:string tbl_name 3:list<string> names)
+  list<Partition> get_partitions_by_names(1:string db_name 2:string tbl_name 3:list<string> names 4:string validTxnList)
                        throws(1:MetaException o1, 2:NoSuchObjectException o2)
   GetPartitionsByNamesResult get_partitions_by_names_req(1:GetPartitionsByNamesRequest req)
                         throws(1:MetaException o1, 2:NoSuchObjectException o2)
@@ -2252,10 +2266,10 @@ service ThriftHiveMetastore extends fb303.FacebookService
   // such statistics exists. If the required statistics doesn't exist, get APIs throw NoSuchObjectException
   // For instance, if get_table_column_statistics is called on a partitioned table for which only
   // partition level column stats exist, get_table_column_statistics will throw NoSuchObjectException
-  ColumnStatistics get_table_column_statistics(1:string db_name, 2:string tbl_name, 3:string col_name) throws
+  ColumnStatistics get_table_column_statistics(1:string db_name, 2:string tbl_name, 3:string col_name, 4:string validWriteIdList) throws
               (1:NoSuchObjectException o1, 2:MetaException o2, 3:InvalidInputException o3, 4:InvalidObjectException o4)
   ColumnStatistics get_partition_column_statistics(1:string db_name, 2:string tbl_name, 3:string part_name,
-               4:string col_name) throws (1:NoSuchObjectException o1, 2:MetaException o2,
+               4:string col_name, 5:string validWriteIdList) throws (1:NoSuchObjectException o1, 2:MetaException o2,
                3:InvalidInputException o3, 4:InvalidObjectException o4)
   TableStatsResult get_table_statistics_req(1:TableStatsRequest request) throws
               (1:NoSuchObjectException o1, 2:MetaException o2)

@@ -213,7 +213,7 @@ public class StatsUpdaterThread extends Thread implements MetaStoreThread {
       throws MetaException, NoSuchTxnException, NoSuchObjectException {
     if (isAnalyzeTableInProgress(fullTableName)) return null;
     String cat = fullTableName.getCat(), db = fullTableName.getDb(), tbl = fullTableName.getTable();
-    Table table = rs.getTable(cat, db, tbl);
+    Table table = rs.getTable(cat, db, tbl, null);
     LOG.debug("Processing table {}", table);
 
     // Check if the table should be skipped.
@@ -297,7 +297,7 @@ public class StatsUpdaterThread extends Thread implements MetaStoreThread {
       try {
         colsPerPartition = rs.getPartitionColsWithStats(cat, db, tbl);
         partNames = Lists.newArrayList(colsPerPartition.keySet());
-        int partitionCount = rs.getNumPartitionsByFilter(cat, db, tbl, "");
+        int partitionCount = rs.getNumPartitionsByFilter(cat, db, tbl, "", null);
         isAllParts = partitionCount == partNames.size();
         isOk = true;
       } finally {
@@ -308,10 +308,10 @@ public class StatsUpdaterThread extends Thread implements MetaStoreThread {
         }
       }
     } else {
-      partNames = rs.listPartitionNames(cat, db, tbl, (short) -1);
+      partNames = rs.listPartitionNames(cat, db, tbl, (short) -1, null);
       isAllParts = true;
     }
-    Table t = rs.getTable(cat, db, tbl);
+    Table t = rs.getTable(cat, db, tbl, null);
     List<Partition> currentBatch = null;
     int nextBatchStart = 0, nextIxInBatch = -1, currentBatchStart = 0;
     List<String> colsToUpdateForAll = null;
@@ -325,7 +325,7 @@ public class StatsUpdaterThread extends Thread implements MetaStoreThread {
         currentBatchStart = nextBatchStart;
         nextBatchStart = nextBatchEnd;
         try {
-          currentBatch = rs.getPartitionsByNames(cat, db, tbl, currentNames);
+          currentBatch = rs.getPartitionsByNames(cat, db, tbl, currentNames, null);
         } catch (NoSuchObjectException e) {
           LOG.error("Failed to get partitions for " + fullTableName + ", skipping some partitions", e);
           currentBatch = null;
@@ -444,7 +444,7 @@ public class StatsUpdaterThread extends Thread implements MetaStoreThread {
     try {
       // Note: this should NOT do txn verification - we want to get outdated stats, to
       //       see if we need to update anything.
-      existingStats = rs.getTableColumnStatistics(cat, db, tbl, allCols);
+      existingStats = rs.getTableColumnStatistics(cat, db, tbl, allCols, null);
     } catch (NoSuchObjectException e) {
       LOG.error("Cannot retrieve existing stats, skipping " + fullTableName, e);
       return null;
