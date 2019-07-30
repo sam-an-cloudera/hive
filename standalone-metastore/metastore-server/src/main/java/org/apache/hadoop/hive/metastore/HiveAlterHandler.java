@@ -293,7 +293,7 @@ public class HiveAlterHandler implements AlterHandler {
           String newTblLocPath = dataWasMoved ? destPath.toUri().getPath() : null;
 
           // also the location field in partition
-          parts = msdb.getPartitions(catName, dbname, name, -1);
+          parts = msdb.getPartitions(catName, dbname, name, -1, null);
           Map<Partition, ColumnStatistics> columnStatsNeedUpdated = new HashMap<>();
           for (Partition part : parts) {
             String oldPartLoc = part.getSd().getLocation();
@@ -359,7 +359,7 @@ public class HiveAlterHandler implements AlterHandler {
         if (isPartitionedTable) {
           //Currently only column related changes can be cascaded in alter table
           if(!MetaStoreServerUtils.areSameColumns(oldt.getSd().getCols(), newt.getSd().getCols())) {
-            parts = msdb.getPartitions(catName, dbname, name, -1);
+            parts = msdb.getPartitions(catName, dbname, name, -1, null);
             for (Partition part : parts) {
               Partition oldPart = new Partition(part);
               List<FieldSchema> oldCols = part.getSd().getCols();
@@ -512,6 +512,7 @@ public class HiveAlterHandler implements AlterHandler {
     //alter partition
     if (part_vals == null || part_vals.size() == 0) {
       try {
+
         msdb.openTransaction();
 
         Table tbl = msdb.getTable(catName, dbname, name, null);
@@ -519,7 +520,7 @@ public class HiveAlterHandler implements AlterHandler {
           throw new InvalidObjectException(
               "Unable to alter partition because table or database does not exist.");
         }
-        oldPart = msdb.getPartition(catName, dbname, name, new_part.getValues());
+        oldPart = msdb.getPartition(catName, dbname, name, new_part.getValues(), null);
         if (MetaStoreServerUtils.requireCalStats(oldPart, new_part, tbl, environmentContext)) {
           // if stats are same, no need to update
           if (MetaStoreServerUtils.isFastStatsSame(oldPart, new_part)) {
@@ -571,6 +572,7 @@ public class HiveAlterHandler implements AlterHandler {
     boolean dataWasMoved = false;
     Database db;
     try {
+
       msdb.openTransaction();
       Table tbl = msdb.getTable(DEFAULT_CATALOG_NAME, dbname, name, null);
       if (tbl == null) {
@@ -578,7 +580,7 @@ public class HiveAlterHandler implements AlterHandler {
             "Unable to alter partition because table or database does not exist.");
       }
       try {
-        oldPart = msdb.getPartition(catName, dbname, name, part_vals);
+        oldPart = msdb.getPartition(catName, dbname, name, part_vals, null);
       } catch (NoSuchObjectException e) {
         // this means there is no existing partition
         throw new InvalidObjectException(
@@ -587,7 +589,7 @@ public class HiveAlterHandler implements AlterHandler {
 
       Partition check_part;
       try {
-        check_part = msdb.getPartition(catName, dbname, name, new_part.getValues());
+        check_part = msdb.getPartition(catName, dbname, name, new_part.getValues(), null);
       } catch(NoSuchObjectException e) {
         // this means there is no existing partition
         check_part = null;
@@ -745,6 +747,7 @@ public class HiveAlterHandler implements AlterHandler {
 
     boolean success = false;
     try {
+
       msdb.openTransaction();
 
       // Note: should we pass in write ID here? We only update stats on parts so probably not.
@@ -766,7 +769,7 @@ public class HiveAlterHandler implements AlterHandler {
               .currentTimeMillis() / 1000));
         }
 
-        Partition oldTmpPart = msdb.getPartition(catName, dbname, name, tmpPart.getValues());
+        Partition oldTmpPart = msdb.getPartition(catName, dbname, name, tmpPart.getValues(), null);
         oldParts.add(oldTmpPart);
         partValsList.add(tmpPart.getValues());
 
@@ -961,7 +964,7 @@ public class HiveAlterHandler implements AlterHandler {
         // NOTE: this doesn't check stats being compliant, but the alterTable call below does.
         //       The worst we can do is delete the stats.
         // Collect column stats which need to be rewritten and remove old stats.
-        colStats = msdb.getTableColumnStatistics(catName, dbName, tableName, oldColNames);
+        colStats = msdb.getTableColumnStatistics(catName, dbName, tableName, oldColNames, null);
         if (colStats == null) {
           updateColumnStats = false;
         } else {
@@ -1050,7 +1053,7 @@ public class HiveAlterHandler implements AlterHandler {
       List<String> oldPartNames = Lists.newArrayList(oldPartName);
       // TODO: doesn't take txn stats into account. This method can only remove stats.
       List<ColumnStatistics> partsColStats = msdb.getPartitionColumnStatistics(catName, dbname, tblname,
-          oldPartNames, oldColNames);
+          oldPartNames, oldColNames, null);
       assert (partsColStats.size() <= 1);
 
       // for out para, this value is initialized by caller.

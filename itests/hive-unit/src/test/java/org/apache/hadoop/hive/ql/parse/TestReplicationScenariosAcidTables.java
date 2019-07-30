@@ -181,8 +181,8 @@ public class TestReplicationScenariosAcidTables extends BaseReplicationScenarios
     // Allocate write ids for both tables t1 and t2 for all txns
     // t1=5+1(insert) and t2=5+2(insert)
     Map<String, Long> tables = new HashMap<>();
-    tables.put("t1", numTxns+1L);
-    tables.put("t2", numTxns+2L);
+    tables.put("t1", numTxns+2L);
+    tables.put("t2", numTxns+3L);
     allocateWriteIdsForTables(primaryDbName, tables, txnHandler, txns, primaryConf);
 
     // Bootstrap dump with open txn timeout as 1s.
@@ -398,7 +398,7 @@ public class TestReplicationScenariosAcidTables extends BaseReplicationScenarios
             primary.dump(primaryDbName, bootStrapDump.lastReplicationId);
 
     long lastReplId = Long.parseLong(bootStrapDump.lastReplicationId);
-    primary.testEventCounts(primaryDbName, lastReplId, null, null, 22);
+    primary.testEventCounts(primaryDbName, lastReplId, null, null, 23);
 
     // Test load
     replica.load(replicatedDbName, incrementalDump.dumpLocation)

@@ -67,10 +67,13 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.hive.common.FileUtils;
+import org.apache.hadoop.hive.common.JavaUtils;
 import org.apache.hadoop.hive.common.ObjectPair;
 import org.apache.hadoop.hive.common.StatsSetupConst;
 import org.apache.hadoop.hive.common.StatsSetupConst.StatDB;
 import org.apache.hadoop.hive.common.StringInternUtils;
+import org.apache.hadoop.hive.common.TableName;
+import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
 import org.apache.hadoop.hive.common.ValidTxnList;
 import org.apache.hadoop.hive.common.ValidTxnWriteIdList;
 import org.apache.hadoop.hive.common.metrics.common.MetricsConstant;
@@ -12488,14 +12491,94 @@ public class SemanticAnalyzer extends BaseSemanticAnalyzer {
       // if phase1Result false return
       return false;
     }
+
+    // 5. Set write id for HMS client
+    if (getTxnMgr().supportsAcid() && conf.get(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY) == null) {
+
+      ValidTxnWriteIdList txnWriteIds = null;
+
+      if (conf.get(ValidTxnWriteIdList.COMPACTOR_VALID_TABLES_WRITEIDS_KEY) != null) {
+        txnWriteIds = new ValidTxnWriteIdList(conf.getLong(ValidTxnList.COMPACTOR_VALID_TXNS_ID_KEY, 0));
+        txnWriteIds.addTableValidWriteIdList(new ValidReaderWriteIdList(conf.get(ValidTxnWriteIdList.COMPACTOR_VALID_TABLES_WRITEIDS_KEY)));
+      }
+      else {
+        List<String> tabNames = new ArrayList<>();
+        for (String tabName : collectTables(qb)) {
+          String fullName = TableName.fromString(tabName, SessionState.get().getCurrentCatalog(), SessionState.get().getCurrentDatabase()).getDbTable();
+          tabNames.add(fullName);
+        }
+
+        if (!tabNames.isEmpty()) {
+          String txnString = conf.get(ValidTxnList.VALID_TXNS_KEY);
+
+          try {
+            if ((txnString == null) || (txnString.isEmpty())) {
+              txnString = getTxnMgr().getValidTxns().toString();
+              conf.set(ValidTxnList.VALID_TXNS_KEY, txnString);
+            }
+
+            txnWriteIds = getTxnMgr().getValidWriteIds(tabNames, txnString);
+          } catch (LockException e) {
+            throw new SemanticException("Failed to fetch write Id from TxnManager", e);
+          }
+        }
+      }
+
+      if (txnWriteIds != null) {
+        conf.set(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY, txnWriteIds.toString());
+        try {
+          db.getMSC().setValidWriteIdList(txnWriteIds.toString());
+          Hive.get().getMSC().setValidWriteIdList(txnWriteIds.toString());
+        } catch (HiveException|MetaException e) {
+          throw new SemanticException("Failed to set write Id for HMS client", e);
+        }
+      }
+    }
+
     LOG.info("Completed phase 1 of Semantic Analysis");
 
-    // 5. Resolve Parse Tree
+    // 6. Resolve Parse Tree
     // Materialization is allowed if it is not a view definition
     getMetaData(qb, createVwDesc == null);
     LOG.info("Completed getting MetaData in Semantic Analysis");
 
     return true;
+  }
+
+  private Set<String> collectTables(QBExpr qbExpr) {
+    Set<String> result = new HashSet<>();
+    if (qbExpr.getQB() != null) {
+      result.addAll(collectTables(qbExpr.getQB()));
+    } else {
+      if (qbExpr.getQBExpr1() != null) {
+        result.addAll(collectTables(qbExpr.getQBExpr1()));
+      }
+      if (qbExpr.getQBExpr2() != null) {
+        result.addAll(collectTables(qbExpr.getQBExpr2()));
+      }
+    }
+    return result;
+  }
+
+  private Set<String> collectTables(QB qb) {
+    Set<String> result = new HashSet<>();
+    for (String alias : qb.getTabAliases()) {
+      result.add(qb.getTabNameForAlias(alias));
+    }
+    for (String alias : qb.getSubqAliases()) {
+      QBExpr qbExpr = qb.getSubqForAlias(alias);
+      if (qbExpr.getQB() != null) {
+        result.addAll(collectTables(qbExpr.getQB()));
+      } else {
+        if (qbExpr.getQBExpr1() != null) {
+          result.addAll(collectTables(qbExpr.getQBExpr1()));
+        }
+        if (qbExpr.getQBExpr2() != null) {
+          result.addAll(collectTables(qbExpr.getQBExpr2()));
+        }
+      }
+    }
+    return result;
   }
 
   public void getHintsFromQB(QB qb, List<ASTNode> hints) {

@@ -333,7 +333,7 @@ public class DbNotificationListener extends TransactionalMetaStoreEventListener 
         Partition p = partitionIter.next();
         Iterator<String> fileIterator;
         //For transactional tables, the actual file copy will be done by acid write event during replay of commit txn.
-        if (!TxnUtils.isTransactionalTable(t)) {
+        if (!TxnUtils.isTransactionalTable(t) && p.getSd() != null) {
           List<String> files = Lists.newArrayList(new FileIterator(p.getSd().getLocation()));
           fileIterator = files.iterator();
         } else {
@@ -760,7 +760,8 @@ public class DbNotificationListener extends TransactionalMetaStoreEventListener 
             .buildUpdateTableColumnStatMessage(updateTableColumnStatEvent.getColStats(),
                     updateTableColumnStatEvent.getTableObj(),
                     updateTableColumnStatEvent.getTableParameters(),
-                    updateTableColumnStatEvent.getWriteId());
+                    updateTableColumnStatEvent.getWriteId(),
+                    updateTableColumnStatEvent.getWriteIds());
     NotificationEvent event = new NotificationEvent(0, now(), EventType.UPDATE_TABLE_COLUMN_STAT.toString(),
                     msgEncoder.getSerializer().serialize(msg));
     ColumnStatisticsDesc statDesc = updateTableColumnStatEvent.getColStats().getStatsDesc();
@@ -790,7 +791,8 @@ public class DbNotificationListener extends TransactionalMetaStoreEventListener 
                     updatePartColStatEvent.getPartVals(),
                     updatePartColStatEvent.getPartParameters(),
                     updatePartColStatEvent.getTableObj(),
-                    updatePartColStatEvent.getWriteId());
+                    updatePartColStatEvent.getWriteId(),
+                    updatePartColStatEvent.getWriteIds());
     NotificationEvent event = new NotificationEvent(0, now(), EventType.UPDATE_PARTITION_COLUMN_STAT.toString(),
                     msgEncoder.getSerializer().serialize(msg));
     ColumnStatisticsDesc statDesc = updatePartColStatEvent.getPartColStats().getStatsDesc();

@@ -29,6 +29,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.ValidTxnList;
+import org.apache.hadoop.hive.common.ValidTxnWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
 import org.apache.hadoop.hive.common.classification.RetrySemantics;
 import org.apache.hadoop.hive.metastore.annotation.NoReconnect;
@@ -780,6 +781,21 @@ public interface IMetaStoreClient {
    * @throws TException general thrift error.
    */
   Table getTable(String catName, String dbName, String tableName) throws MetaException, TException;
+
+  /**
+   * Get a table object.
+   * @param catName catalog the table is in.
+   * @param dbName database the table is in.
+   * @param tableName table name.
+   * @param checkTransactional
+   *          checks whether the metadata table stats are valid (or
+   *          compilant with the snapshot isolation of) for the current transaction.
+   * @param getColumnStats get the column stats, if available, when true
+   * @return table object.
+   * @throws MetaException Something went wrong, usually in the RDBMS.
+   * @throws TException general thrift error.
+   */
+  Table getTable(String catName, String dbName, String tableName, boolean checkTransactional, boolean getColumnStats) throws MetaException, TException;
 
   /**
    * Get a table object.
@@ -3982,4 +3998,8 @@ public interface IMetaStoreClient {
    * @return String representation of the version number of Metastore server (eg: 3.1.0-SNAPSHOT)
    */
   String getServerVersion() throws TException;
+
+  void setValidWriteIdList(String txnWriteIdList);
+
+  void clearValidWriteIdList();
 }

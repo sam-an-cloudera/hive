@@ -32,6 +32,11 @@ public interface ValidTxnList {
   public static final String VALID_TXNS_KEY = "hive.txn.valid.txns";
 
   /**
+   * Key used to store txn id for compactor in a
+   * {@link org.apache.hadoop.conf.Configuration} object.
+   */
+  public static final String COMPACTOR_VALID_TXNS_ID_KEY = "hive.compactor.txn.valid.txns.id";
+  /**
    * The response to a range query.  NONE means no values in this range match,
    * SOME mean that some do, and ALL means that every value does.
    */

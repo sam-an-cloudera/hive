@@ -42,6 +42,7 @@ import java.util.stream.Collectors;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.curator.shaded.com.google.common.collect.Lists;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.hive.common.JavaUtils;
@@ -1090,22 +1091,35 @@ public class Driver implements IDriver {
     }
     List<String> txnTables = getTransactionalTableList(plan);
     ValidTxnWriteIdList txnWriteIds = null;
-    if (compactionWriteIds != null) {
-      /**
-       * This is kludgy: here we need to read with Compactor's snapshot/txn
-       * rather than the snapshot of the current {@code txnMgr}, in effect
-       * simulating a "flashback query" but can't actually share compactor's
-       * txn since it would run multiple statements.  See more comments in
-       * {@link org.apache.hadoop.hive.ql.txn.compactor.Worker} where it start
-       * the compactor txn*/
-      if (txnTables.size() != 1) {
-        throw new LockException("Unexpected tables in compaction: " + txnTables);
+
+    // If we have collected all required table writeid (in SemanticAnalyzer), skip fetch again
+    if (conf.get(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY) != null) {
+      txnWriteIds = new ValidTxnWriteIdList(conf.get(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY));
+      for (String txnTable : txnTables) {
+        if (txnWriteIds.getTableValidWriteIdList(txnTable) == null) {
+          txnWriteIds = null;
+          break;
+        }
       }
-      String fullTableName = txnTables.get(0);
-      txnWriteIds = new ValidTxnWriteIdList(compactorTxnId);
-      txnWriteIds.addTableValidWriteIdList(compactionWriteIds);
-    } else {
-      txnWriteIds = txnMgr.getValidWriteIds(txnTables, txnString);
+    }
+    if (txnWriteIds == null) {
+      if (compactionWriteIds != null) {
+        /**
+         * This is kludgy: here we need to read with Compactor's snapshot/txn
+         * rather than the snapshot of the current {@code txnMgr}, in effect
+         * simulating a "flashback query" but can't actually share compactor's
+         * txn since it would run multiple statements.  See more comments in
+         * {@link org.apache.hadoop.hive.ql.txn.compactor.Worker} where it start
+         * the compactor txn*/
+        if (txnTables.size() != 1) {
+          throw new LockException("Unexpected tables in compaction: " + txnTables);
+        }
+        String fullTableName = txnTables.get(0);
+        txnWriteIds = new ValidTxnWriteIdList(compactorTxnId);
+        txnWriteIds.addTableValidWriteIdList(compactionWriteIds);
+      } else {
+        txnWriteIds = txnMgr.getValidWriteIds(txnTables, txnString);
+      }
     }
     String writeIdStr = txnWriteIds.toString();
     conf.set(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY, writeIdStr);
@@ -1339,35 +1353,47 @@ public class Driver implements IDriver {
     }
     // If we've opened a transaction we need to commit or rollback rather than explicitly
     // releasing the locks.
-    conf.unset(ValidTxnList.VALID_TXNS_KEY);
-    conf.unset(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY);
     if(!checkConcurrency()) {
       return;
     }
-    if (txnMgr.isTxnOpen()) {
-      if (commit) {
-        if(conf.getBoolVar(ConfVars.HIVE_IN_TEST) && conf.getBoolVar(ConfVars.HIVETESTMODEROLLBACKTXN)) {
+    try {
+      if (txnMgr.isTxnOpen()) {
+        if (commit) {
+          if(conf.getBoolVar(ConfVars.HIVE_IN_TEST) && conf.getBoolVar(ConfVars.HIVETESTMODEROLLBACKTXN)) {
+            txnMgr.rollbackTxn();
+          }
+          else {
+            txnMgr.commitTxn();//both commit & rollback clear ALL locks for this tx
+          }
+        } else {
           txnMgr.rollbackTxn();
         }
-        else {
-          txnMgr.commitTxn();//both commit & rollback clear ALL locks for this tx
-        }
       } else {
-        txnMgr.rollbackTxn();
+        //since there is no tx, we only have locks for current query (if any)
+        if (ctx != null && ctx.getHiveLocks() != null) {
+          hiveLocks.addAll(ctx.getHiveLocks());
+        }
+        txnMgr.releaseLocks(hiveLocks);
       }
-    } else {
-      //since there is no tx, we only have locks for current query (if any)
-      if (ctx != null && ctx.getHiveLocks() != null) {
-        hiveLocks.addAll(ctx.getHiveLocks());
+    } finally {
+      hiveLocks.clear();
+      if (ctx != null) {
+        ctx.setHiveLocks(null);
       }
-      txnMgr.releaseLocks(hiveLocks);
-    }
-    hiveLocks.clear();
-    if (ctx != null) {
-      ctx.setHiveLocks(null);
-    }
 
-    perfLogger.PerfLogEnd(CLASS_NAME, PerfLogger.RELEASE_LOCKS);
+      for (String key : new String[] {ValidTxnList.VALID_TXNS_KEY, ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY,
+          ValidTxnList.COMPACTOR_VALID_TXNS_ID_KEY, ValidTxnWriteIdList.COMPACTOR_VALID_TABLES_WRITEIDS_KEY}) {
+        conf.unset(key);
+        SessionState.get().getConf().unset(key);
+      }
+
+      try {
+        Hive.get().clearValidWriteIdList();
+      } catch (HiveException e) {
+        LOG.error("Error clear ValidWriteIdList, this shall never happen:" + e);
+      }
+      perfLogger.PerfLogEnd(CLASS_NAME, PerfLogger.RELEASE_LOCKS);
+    }
   }
 
   /**
@@ -2645,5 +2671,9 @@ public class Driver implements IDriver {
   public void setCompactionWriteIds(ValidWriteIdList val, long compactorTxnId) {
     this.compactionWriteIds = val;
     this.compactorTxnId = compactorTxnId;
+    if (val != null) {
+      conf.set(ValidTxnWriteIdList.COMPACTOR_VALID_TABLES_WRITEIDS_KEY, val.toString());
+    }
+    conf.setLong(ValidTxnList.COMPACTOR_VALID_TXNS_ID_KEY, compactorTxnId);
   }
 }

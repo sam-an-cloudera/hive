@@ -111,6 +111,7 @@ import org.apache.hadoop.hive.metastore.api.*;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
 import org.apache.hadoop.hive.metastore.utils.MetaStoreServerUtils;
 import org.apache.hadoop.hive.metastore.utils.MetaStoreUtils;
+import org.apache.hadoop.hive.ql.Context;
 import org.apache.hadoop.hive.ql.ErrorMsg;
 import org.apache.hadoop.hive.ql.ddl.table.partition.AlterTableAddPartitionDesc;
 import org.apache.hadoop.hive.ql.ddl.table.partition.AlterTableDropPartitionDesc;
@@ -119,6 +120,7 @@ import org.apache.hadoop.hive.ql.exec.FunctionRegistry;
 import org.apache.hadoop.hive.ql.exec.FunctionUtils;
 import org.apache.hadoop.hive.ql.exec.SerializationUtilities;
 import org.apache.hadoop.hive.ql.exec.Utilities;
+import org.apache.hadoop.hive.ql.exec.repl.util.ReplUtils;
 import org.apache.hadoop.hive.ql.io.AcidUtils;
 import org.apache.hadoop.hive.ql.io.AcidUtils.TableSnapshot;
 import org.apache.hadoop.hive.ql.lockmgr.DbTxnManager;
@@ -326,7 +328,12 @@ public class Hive {
       }
       db = create(c, doRegisterAllFns);
     }
-    if (c != null) {
+    if (c != null && db.conf != null && db.conf != c) {
+      if (db.conf.get(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY) != null) {
+        c.set(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY, db.conf.get(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY));
+      } else {
+        c.unset(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY);
+      }
       db.conf = c;
     }
     return db;
@@ -690,6 +697,7 @@ public class Hive {
       EnvironmentContext environmentContext, boolean transactional, long replWriteId)
       throws HiveException {
 
+    boolean txnOpened = false;
     if (catName == null) {
       catName = getDefaultCatalog(conf);
     }
@@ -709,7 +717,13 @@ public class Hive {
       // Take a table snapshot and set it to newTbl.
       AcidUtils.TableSnapshot tableSnapshot = null;
       if (transactional) {
-        if (replWriteId > 0) {
+        if (AcidUtils.isTransactionalTable(newTbl) && !inReplication(newTbl)) {
+          txnOpened = openTxnIfNeeded();
+          // Advance writeId for ddl on transactional table
+          AcidUtils.advanceWriteId(conf, newTbl);
+        }
+
+        if (inReplication(newTbl)) {
           // We need a valid writeId list for a transactional table modification. During
           // replication we do not have a valid writeId list which was used to modify the table
           // on the source. But we know for sure that the writeId associated with it was valid
@@ -738,6 +752,12 @@ public class Hive {
       throw new HiveException("Unable to alter table. " + e.getMessage(), e);
     } catch (TException e) {
       throw new HiveException("Unable to alter table. " + e.getMessage(), e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
 
@@ -789,6 +809,7 @@ public class Hive {
   public void alterPartition(String catName, String dbName, String tblName, Partition newPart,
                              EnvironmentContext environmentContext, boolean transactional)
       throws InvalidOperationException, HiveException {
+    boolean txnOpened = false;
     try {
       if (catName == null) {
         catName = getDefaultCatalog(conf);
@@ -802,8 +823,14 @@ public class Hive {
       if (environmentContext == null) {
         environmentContext = new EnvironmentContext();
       }
+
       AcidUtils.TableSnapshot tableSnapshot = null;
       if (transactional) {
+        if (AcidUtils.isTransactionalTable(newPart.getTable()) && !inReplication(newPart.getTable())) {
+          txnOpened = openTxnIfNeeded();
+          // Advance writeId for ddl on transactional table
+          AcidUtils.advanceWriteId(conf, newPart.getTable());
+        }
         tableSnapshot = AcidUtils.getTableSnapshot(conf, newPart.getTable(), true);
         if (tableSnapshot != null) {
           newPart.getTPartition().setWriteId(tableSnapshot.getWriteId());
@@ -819,6 +846,12 @@ public class Hive {
       throw new HiveException("Unable to alter partition. " + e.getMessage(), e);
     } catch (TException e) {
       throw new HiveException("Unable to alter partition. " + e.getMessage(), e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
 
@@ -846,12 +879,18 @@ public class Hive {
   public void alterPartitions(String tblName, List<Partition> newParts,
                               EnvironmentContext environmentContext, boolean transactional)
       throws InvalidOperationException, HiveException {
+    boolean txnOpened = false;
     String[] names = Utilities.getDbTableName(tblName);
     List<org.apache.hadoop.hive.metastore.api.Partition> newTParts =
       new ArrayList<org.apache.hadoop.hive.metastore.api.Partition>();
     try {
       AcidUtils.TableSnapshot tableSnapshot = null;
       if (transactional) {
+        if (AcidUtils.isTransactionalTable(newParts.get(0).getTable()) && !inReplication(newParts.get(0).getTable())) {
+          // Advance writeId for ddl on transactional table
+          txnOpened = openTxnIfNeeded();
+          AcidUtils.advanceWriteId(conf, newParts.get(0).getTable());
+        }
         tableSnapshot = AcidUtils.getTableSnapshot(conf, newParts.get(0).getTable(), true);
       }
       // Remove the DDL time so that it gets refreshed
@@ -873,6 +912,12 @@ public class Hive {
       throw new HiveException("Unable to alter partition. " + e.getMessage(), e);
     } catch (TException e) {
       throw new HiveException("Unable to alter partition. " + e.getMessage(), e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
   /**
@@ -889,6 +934,7 @@ public class Hive {
   public void renamePartition(Table tbl, Map<String, String> oldPartSpec, Partition newPart,
                               long replWriteId)
       throws HiveException {
+    boolean txnOpened = false;
     try {
       Map<String, String> newPartSpec = newPart.getSpec();
       if (oldPartSpec.keySet().size() != tbl.getPartCols().size()
@@ -911,8 +957,13 @@ public class Hive {
       }
       String validWriteIds = null;
       if (AcidUtils.isTransactionalTable(tbl)) {
+        if (!inReplication(tbl)) {
+          // Advance writeId for ddl on transactional table
+          txnOpened = openTxnIfNeeded();
+          AcidUtils.advanceWriteId(conf, tbl);
+        }
         TableSnapshot tableSnapshot;
-        if (replWriteId > 0) {
+        if (inReplication(tbl)) {
           // We need a valid writeId list for a transactional table modification. During
           // replication we do not have a valid writeId list which was used to modify the table
           // on the source. But we know for sure that the writeId associated with it was valid
@@ -941,6 +992,12 @@ public class Hive {
       throw new HiveException("Unable to rename partition. " + e.getMessage(), e);
     } catch (TException e) {
       throw new HiveException("Unable to rename partition. " + e.getMessage(), e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
 
@@ -1000,6 +1057,7 @@ public class Hive {
     List<SQLDefaultConstraint> defaultConstraints,
     List<SQLCheckConstraint> checkConstraints)
             throws HiveException {
+    boolean txnOpened = false;
     try {
       if (tbl.getDbName() == null || "".equals(tbl.getDbName().trim())) {
         tbl.setDbName(SessionState.get().getCurrentDatabase());
@@ -1023,6 +1081,11 @@ public class Hive {
           principalPrivs.setRolePrivileges(grants.getRoleGrants());
           tTbl.setPrivileges(principalPrivs);
         }
+      }
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
       }
       // Set table snapshot to api.Table to make it persistent. A transactional table being
       // replicated may have a valid write Id copied from the source. Use that instead of
@@ -1049,6 +1112,12 @@ public class Hive {
       }
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
 
@@ -1143,7 +1212,18 @@ public class Hive {
    */
   public void dropTable(String dbName, String tableName, boolean deleteData,
       boolean ignoreUnknownTab, boolean ifPurge) throws HiveException {
+    boolean txnOpened = false;
     try {
+      Table tbl = null;
+      try {
+        tbl = getTable(dbName, tableName);
+      } catch (InvalidTableException e) {
+      }
+      if (tbl != null && AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().dropTable(dbName, tableName, deleteData, ignoreUnknownTab, ifPurge);
     } catch (NoSuchObjectException e) {
       if (!ignoreUnknownTab) {
@@ -1158,6 +1238,12 @@ public class Hive {
       throw new HiveException(e);
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
 
@@ -1171,10 +1257,19 @@ public class Hive {
    * @throws HiveException
    */
   public void truncateTable(String dbDotTableName, Map<String, String> partSpec, Long writeId) throws HiveException {
+    boolean txnOpened = false;
     try {
       Table table = getTable(dbDotTableName, true);
+
       AcidUtils.TableSnapshot snapshot = null;
       if (AcidUtils.isTransactionalTable(table)) {
+
+        if (!inReplication(table)) {
+          txnOpened = openTxnIfNeeded();
+          // Advance writeId for ddl on transactional table
+          AcidUtils.advanceWriteId(conf, table);
+        }
+
         if (writeId <= 0) {
           snapshot = AcidUtils.getTableSnapshot(conf, table, true);
         } else {
@@ -1195,6 +1290,12 @@ public class Hive {
       }
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
 
@@ -1261,7 +1362,7 @@ public class Hive {
    */
   public Table getTable(final String dbName, final String tableName,
                         boolean throwException) throws HiveException {
-    return this.getTable(dbName, tableName, throwException, false);
+    return this.getTable(dbName, tableName, throwException, true);
   }
 
   /**
@@ -1311,20 +1412,7 @@ public class Hive {
     // Get the table from metastore
     org.apache.hadoop.hive.metastore.api.Table tTable = null;
     try {
-      // Note: this is currently called w/true from StatsOptimizer only.
-      if (checkTransactional) {
-        ValidWriteIdList validWriteIdList = null;
-        long txnId = SessionState.get().getTxnMgr() != null ?
-            SessionState.get().getTxnMgr().getCurrentTxnId() : 0;
-        if (txnId > 0) {
-          validWriteIdList = AcidUtils.getTableValidWriteIdListWithTxnList(conf,
-              dbName, tableName);
-        }
-        tTable = getMSC().getTable(getDefaultCatalog(conf), dbName, tableName,
-            validWriteIdList != null ? validWriteIdList.toString() : null, getColumnStats);
-      } else {
-        tTable = getMSC().getTable(dbName, tableName, getColumnStats);
-      }
+      tTable = getMSC().getTable(getDefaultCatalog(conf), dbName, tableName, checkTransactional, getColumnStats);
     } catch (NoSuchObjectException e) {
       if (throwException) {
         throw new InvalidTableException(tableName);
@@ -1984,48 +2072,61 @@ public class Hive {
                                  boolean isSrcLocal, boolean isAcidIUDoperation,
                                  boolean resetStatistics, Long writeId,
                                  int stmtId, boolean isInsertOverwrite) throws HiveException {
+    boolean txnOpened = false;
+    try {
+      PerfLogger perfLogger = SessionState.getPerfLogger();
+      perfLogger.PerfLogBegin("MoveTask", PerfLogger.LOAD_PARTITION);
 
-    PerfLogger perfLogger = SessionState.getPerfLogger();
-    perfLogger.PerfLogBegin("MoveTask", PerfLogger.LOAD_PARTITION);
+      // Get the partition object if it already exists
+      Partition oldPart = getPartition(tbl, partSpec, false);
+      boolean isTxnTable = AcidUtils.isTransactionalTable(tbl);
 
-    // Get the partition object if it already exists
-    Partition oldPart = getPartition(tbl, partSpec, false);
-    boolean isTxnTable = AcidUtils.isTransactionalTable(tbl);
+      // If config is set, table is not temporary and partition being inserted exists, capture
+      // the list of files added. For not yet existing partitions (insert overwrite to new partition
+      // or dynamic partition inserts), the add partition event will capture the list of files added.
+      List<Path> newFiles = Collections.synchronizedList(new ArrayList<>());
 
-    // If config is set, table is not temporary and partition being inserted exists, capture
-    // the list of files added. For not yet existing partitions (insert overwrite to new partition
-    // or dynamic partition inserts), the add partition event will capture the list of files added.
-    List<Path> newFiles = Collections.synchronizedList(new ArrayList<>());
+      Partition newTPart = loadPartitionInternal(loadPath, tbl, partSpec, oldPart,
+              loadFileType, inheritTableSpecs,
+              inheritLocation, isSkewedStoreAsSubdir, isSrcLocal, isAcidIUDoperation,
+              resetStatistics, writeId, stmtId, isInsertOverwrite, isTxnTable, newFiles);
 
-    Partition newTPart = loadPartitionInternal(loadPath, tbl, partSpec, oldPart,
-            loadFileType, inheritTableSpecs,
-            inheritLocation, isSkewedStoreAsSubdir, isSrcLocal, isAcidIUDoperation,
-            resetStatistics, writeId, stmtId, isInsertOverwrite, isTxnTable, newFiles);
-
-    AcidUtils.TableSnapshot tableSnapshot = isTxnTable ? getTableSnapshot(tbl, writeId) : null;
-    if (tableSnapshot != null) {
-      newTPart.getTPartition().setWriteId(tableSnapshot.getWriteId());
-    }
-
-    if (oldPart == null) {
-      addPartitionToMetastore(newTPart, resetStatistics, tbl, tableSnapshot);
-      // For acid table, add the acid_write event with file list at the time of load itself. But
-      // it should be done after partition is created.
-      if (isTxnTable && (null != newFiles)) {
-        addWriteNotificationLog(tbl, partSpec, newFiles, writeId);
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
       }
-    } else {
-      try {
-        setStatsPropAndAlterPartition(resetStatistics, tbl, newTPart, tableSnapshot);
-      } catch (TException e) {
-        LOG.error(StringUtils.stringifyException(e));
-        throw new HiveException(e);
+      AcidUtils.TableSnapshot tableSnapshot = isTxnTable ? getTableSnapshot(tbl, writeId) : null;
+      if (tableSnapshot != null) {
+        newTPart.getTPartition().setWriteId(tableSnapshot.getWriteId());
+      }
+
+      if (oldPart == null) {
+        addPartitionToMetastore(newTPart, resetStatistics, tbl, tableSnapshot);
+        // For acid table, add the acid_write event with file list at the time of load itself. But
+        // it should be done after partition is created.
+        if (isTxnTable && (null != newFiles)) {
+          addWriteNotificationLog(tbl, partSpec, newFiles, writeId);
+        }
+      } else {
+        try {
+          setStatsPropAndAlterPartition(resetStatistics, tbl, newTPart, tableSnapshot);
+        } catch (TException e) {
+          LOG.error(StringUtils.stringifyException(e));
+          throw new HiveException(e);
+        }
+      }
+
+      perfLogger.PerfLogEnd("MoveTask", PerfLogger.LOAD_PARTITION);
+
+      return newTPart;
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
       }
     }
-
-    perfLogger.PerfLogEnd("MoveTask", PerfLogger.LOAD_PARTITION);
-
-    return newTPart;
   }
 
   /**
@@ -2633,206 +2734,219 @@ private void constructOneLBLocationMap(FileStatus fSta,
       final int numDP, final int numLB, final boolean isAcid, final long writeId, final int stmtId,
       final boolean resetStatistics, final AcidUtils.Operation operation,
       boolean isInsertOverwrite) throws HiveException {
+    boolean txnOpened = false;
+    try {
+      PerfLogger perfLogger = SessionState.getPerfLogger();
+      perfLogger.PerfLogBegin("MoveTask", PerfLogger.LOAD_DYNAMIC_PARTITIONS);
 
-    PerfLogger perfLogger = SessionState.getPerfLogger();
-    perfLogger.PerfLogBegin("MoveTask", PerfLogger.LOAD_DYNAMIC_PARTITIONS);
+      // Get all valid partition paths and existing partitions for them (if any)
+      final Table tbl = getTable(tableName);
+      final Set<Path> validPartitions = getValidPartitionsInPath(numDP, numLB, loadPath, writeId, stmtId,
+          AcidUtils.isInsertOnlyTable(tbl.getParameters()), isInsertOverwrite);
 
-    // Get all valid partition paths and existing partitions for them (if any)
-    final Table tbl = getTable(tableName);
-    final Set<Path> validPartitions = getValidPartitionsInPath(numDP, numLB, loadPath, writeId, stmtId,
-        AcidUtils.isInsertOnlyTable(tbl.getParameters()), isInsertOverwrite);
+      final int partsToLoad = validPartitions.size();
+      final AtomicInteger partitionsLoaded = new AtomicInteger(0);
+      final boolean inPlaceEligible = conf.getLong("fs.trash.interval", 0) <= 0
+          && InPlaceUpdate.canRenderInPlace(conf) && !SessionState.getConsole().getIsSilent();
+      final PrintStream ps = (inPlaceEligible) ? SessionState.getConsole().getInfoStream() : null;
 
-    final int partsToLoad = validPartitions.size();
-    final AtomicInteger partitionsLoaded = new AtomicInteger(0);
-    final boolean inPlaceEligible = conf.getLong("fs.trash.interval", 0) <= 0
-        && InPlaceUpdate.canRenderInPlace(conf) && !SessionState.getConsole().getIsSilent();
-    final PrintStream ps = (inPlaceEligible) ? SessionState.getConsole().getInfoStream() : null;
+      final SessionState parentSession = SessionState.get();
+      List<Callable<Partition>> tasks = Lists.newLinkedList();
 
-    final SessionState parentSession = SessionState.get();
-    List<Callable<Partition>> tasks = Lists.newLinkedList();
-
-    final class PartitionDetails {
-      Map<String, String> fullSpec;
-      Partition partition;
-      List<Path> newFiles;
-      boolean hasOldPartition = false;
-      AcidUtils.TableSnapshot tableSnapshot;
-    }
-
-    Map<Path, PartitionDetails> partitionDetailsMap =
-            Collections.synchronizedMap(new LinkedHashMap<>());
-
-    // calculate full path spec for each valid partition path
-    validPartitions.forEach(partPath -> {
-      Map<String, String> fullPartSpec = Maps.newLinkedHashMap(partSpec);
-      if (!Warehouse.makeSpecFromName(fullPartSpec, partPath, new HashSet<>(partSpec.keySet()))) {
-        Utilities.FILE_OP_LOGGER.warn("Ignoring invalid DP directory " + partPath);
-      } else {
-        PartitionDetails details = new PartitionDetails();
-        details.fullSpec = fullPartSpec;
-        partitionDetailsMap.put(partPath, details);
+      final class PartitionDetails {
+        Map<String, String> fullSpec;
+        Partition partition;
+        List<Path> newFiles;
+        boolean hasOldPartition = false;
+        AcidUtils.TableSnapshot tableSnapshot;
       }
-    });
 
-    // fetch all the partitions matching the part spec using the partition iterable
-    // this way the maximum batch size configuration parameter is considered
-    PartitionIterable partitionIterable = new PartitionIterable(Hive.get(), tbl, partSpec,
-              conf.getInt(MetastoreConf.ConfVars.BATCH_RETRIEVE_MAX.getVarname(), 300));
-    Iterator<Partition> iterator = partitionIterable.iterator();
+      Map<Path, PartitionDetails> partitionDetailsMap =
+              Collections.synchronizedMap(new LinkedHashMap<>());
 
-    // Match valid partition path to partitions
-    while (iterator.hasNext()) {
-      Partition partition = iterator.next();
-      partitionDetailsMap.entrySet().stream()
-              .filter(entry -> entry.getValue().fullSpec.equals(partition.getSpec()))
-              .findAny().ifPresent(entry -> {
-                entry.getValue().partition = partition;
-                entry.getValue().hasOldPartition = true;
-              });
-    }
-
-    boolean isTxnTable = AcidUtils.isTransactionalTable(tbl);
-    AcidUtils.TableSnapshot tableSnapshot = isTxnTable ? getTableSnapshot(tbl, writeId) : null;
-
-    for (Entry<Path, PartitionDetails> entry : partitionDetailsMap.entrySet()) {
-      tasks.add(() -> {
-        PartitionDetails partitionDetails = entry.getValue();
-        Map<String, String> fullPartSpec = partitionDetails.fullSpec;
-        try {
-
-          SessionState.setCurrentSessionState(parentSession);
-          LOG.info("New loading path = " + entry.getKey() + " withPartSpec " + fullPartSpec);
-
-          List<Path> newFiles = Lists.newArrayList();
-          Partition oldPartition = partitionDetails.partition;
-          // load the partition
-          Partition partition = loadPartitionInternal(entry.getKey(), tbl,
-                  fullPartSpec, oldPartition, loadFileType, true, false, numLB > 0, false, isAcid,
-                  resetStatistics, writeId, stmtId, isInsertOverwrite, isTxnTable, newFiles);
-          // if the partition already existed before the loading, no need to add it again to the
-          // metastore
-
-          if (tableSnapshot != null) {
-            partition.getTPartition().setWriteId(tableSnapshot.getWriteId());
-          }
-          partitionDetails.tableSnapshot = tableSnapshot;
-          if (oldPartition == null) {
-            partitionDetails.newFiles = newFiles;
-            partitionDetails.partition = partition;
-          }
-
-          if (inPlaceEligible) {
-            synchronized (ps) {
-              InPlaceUpdate.rePositionCursor(ps);
-              partitionsLoaded.incrementAndGet();
-              InPlaceUpdate.reprintLine(ps, "Loaded : " + partitionsLoaded.get() + "/"
-                  + partsToLoad + " partitions.");
-            }
-          }
-
-          return partition;
-        } catch (Exception e) {
-          LOG.error("Exception when loading partition with parameters "
-                  + " partPath=" + entry.getKey() + ", "
-                  + " table=" + tbl.getTableName() + ", "
-                  + " partSpec=" + fullPartSpec + ", "
-                  + " loadFileType=" + loadFileType.toString() + ", "
-                  + " listBucketingLevel=" + numLB + ", "
-                  + " isAcid=" + isAcid + ", "
-                  + " resetStatistics=" + resetStatistics, e);
-          throw e;
+      // calculate full path spec for each valid partition path
+      validPartitions.forEach(partPath -> {
+        Map<String, String> fullPartSpec = Maps.newLinkedHashMap(partSpec);
+        if (!Warehouse.makeSpecFromName(fullPartSpec, partPath, new HashSet<>(partSpec.keySet()))) {
+          Utilities.FILE_OP_LOGGER.warn("Ignoring invalid DP directory " + partPath);
+        } else {
+          PartitionDetails details = new PartitionDetails();
+          details.fullSpec = fullPartSpec;
+          partitionDetailsMap.put(partPath, details);
         }
       });
-    }
 
-    int poolSize = conf.getInt(ConfVars.HIVE_LOAD_DYNAMIC_PARTITIONS_THREAD_COUNT.varname, 1);
-    ExecutorService executor = Executors.newFixedThreadPool(poolSize,
-            new ThreadFactoryBuilder().setDaemon(true).setNameFormat("load-dynamic-partitionsToAdd-%d").build());
+      // fetch all the partitions matching the part spec using the partition iterable
+      // this way the maximum batch size configuration parameter is considered
+      PartitionIterable partitionIterable = new PartitionIterable(Hive.get(), tbl, partSpec,
+                conf.getInt(MetastoreConf.ConfVars.BATCH_RETRIEVE_MAX.getVarname(), 300));
+      Iterator<Partition> iterator = partitionIterable.iterator();
 
-    List<Future<Partition>> futures = Lists.newLinkedList();
-    Map<Map<String, String>, Partition> result = Maps.newLinkedHashMap();
-    try {
-      futures = executor.invokeAll(tasks);
-      LOG.debug("Number of partitionsToAdd to be added is " + futures.size());
-      for (Future<Partition> future : futures) {
-        Partition partition = future.get();
-        result.put(partition.getSpec(), partition);
+      // Match valid partition path to partitions
+      while (iterator.hasNext()) {
+        Partition partition = iterator.next();
+        partitionDetailsMap.entrySet().stream()
+                .filter(entry -> entry.getValue().fullSpec.equals(partition.getSpec()))
+                .findAny().ifPresent(entry -> {
+                  entry.getValue().partition = partition;
+                  entry.getValue().hasOldPartition = true;
+                });
       }
-      // add new partitions in batch
 
-      addPartitionsToMetastore(
-              partitionDetailsMap.entrySet()
-                      .stream()
-                      .filter(entry -> !entry.getValue().hasOldPartition)
-                      .map(entry -> entry.getValue().partition)
-                      .collect(Collectors.toList()),
-              resetStatistics,
-              tbl,
-              partitionDetailsMap.entrySet()
-                      .stream()
-                      .filter(entry -> !entry.getValue().hasOldPartition)
-                      .map(entry -> entry.getValue().tableSnapshot)
-                      .collect(Collectors.toList()));
-      // For acid table, add the acid_write event with file list at the time of load itself. But
-      // it should be done after partition is created.
+      boolean isTxnTable = AcidUtils.isTransactionalTable(tbl);
+      if (isTxnTable && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
+      AcidUtils.TableSnapshot tableSnapshot = isTxnTable ? getTableSnapshot(tbl, writeId) : null;
 
       for (Entry<Path, PartitionDetails> entry : partitionDetailsMap.entrySet()) {
-        PartitionDetails partitionDetails = entry.getValue();
-        if (isTxnTable && partitionDetails.newFiles != null) {
-          addWriteNotificationLog(tbl, partitionDetails.fullSpec, partitionDetails.newFiles, writeId);
+        tasks.add(() -> {
+          PartitionDetails partitionDetails = entry.getValue();
+          Map<String, String> fullPartSpec = partitionDetails.fullSpec;
+          try {
+
+            SessionState.setCurrentSessionState(parentSession);
+            LOG.info("New loading path = " + entry.getKey() + " withPartSpec " + fullPartSpec);
+
+            List<Path> newFiles = Lists.newArrayList();
+            Partition oldPartition = partitionDetails.partition;
+            // load the partition
+            Partition partition = loadPartitionInternal(entry.getKey(), tbl,
+                    fullPartSpec, oldPartition, loadFileType, true, false, numLB > 0, false, isAcid,
+                    resetStatistics, writeId, stmtId, isInsertOverwrite, isTxnTable, newFiles);
+            // if the partition already existed before the loading, no need to add it again to the
+            // metastore
+
+            if (tableSnapshot != null) {
+              partition.getTPartition().setWriteId(tableSnapshot.getWriteId());
+            }
+            partitionDetails.tableSnapshot = tableSnapshot;
+            if (oldPartition == null) {
+              partitionDetails.newFiles = newFiles;
+              partitionDetails.partition = partition;
+            }
+
+            if (inPlaceEligible) {
+              synchronized (ps) {
+                InPlaceUpdate.rePositionCursor(ps);
+                partitionsLoaded.incrementAndGet();
+                InPlaceUpdate.reprintLine(ps, "Loaded : " + partitionsLoaded.get() + "/"
+                    + partsToLoad + " partitions.");
+              }
+            }
+
+            return partition;
+          } catch (Exception e) {
+            LOG.error("Exception when loading partition with parameters "
+                    + " partPath=" + entry.getKey() + ", "
+                    + " table=" + tbl.getTableName() + ", "
+                    + " partSpec=" + fullPartSpec + ", "
+                    + " loadFileType=" + loadFileType.toString() + ", "
+                    + " listBucketingLevel=" + numLB + ", "
+                    + " isAcid=" + isAcid + ", "
+                    + " resetStatistics=" + resetStatistics, e);
+            throw e;
+          }
+        });
+      }
+
+      int poolSize = conf.getInt(ConfVars.HIVE_LOAD_DYNAMIC_PARTITIONS_THREAD_COUNT.varname, 1);
+      ExecutorService executor = Executors.newFixedThreadPool(poolSize,
+              new ThreadFactoryBuilder().setDaemon(true).setNameFormat("load-dynamic-partitionsToAdd-%d").build());
+
+      List<Future<Partition>> futures = Lists.newLinkedList();
+      Map<Map<String, String>, Partition> result = Maps.newLinkedHashMap();
+      try {
+        futures = executor.invokeAll(tasks);
+        LOG.debug("Number of partitionsToAdd to be added is " + futures.size());
+        for (Future<Partition> future : futures) {
+          Partition partition = future.get();
+          result.put(partition.getSpec(), partition);
+        }
+        // add new partitions in batch
+
+        addPartitionsToMetastore(
+                partitionDetailsMap.entrySet()
+                        .stream()
+                        .filter(entry -> !entry.getValue().hasOldPartition)
+                        .map(entry -> entry.getValue().partition)
+                        .collect(Collectors.toList()),
+                resetStatistics,
+                tbl,
+                partitionDetailsMap.entrySet()
+                        .stream()
+                        .filter(entry -> !entry.getValue().hasOldPartition)
+                        .map(entry -> entry.getValue().tableSnapshot)
+                        .collect(Collectors.toList()));
+        // For acid table, add the acid_write event with file list at the time of load itself. But
+        // it should be done after partition is created.
+
+        for (Entry<Path, PartitionDetails> entry : partitionDetailsMap.entrySet()) {
+          PartitionDetails partitionDetails = entry.getValue();
+          if (isTxnTable && partitionDetails.newFiles != null) {
+            addWriteNotificationLog(tbl, partitionDetails.fullSpec, partitionDetails.newFiles, writeId);
+          }
+        }
+
+        setStatsPropAndAlterPartitions(resetStatistics, tbl,
+                partitionDetailsMap.entrySet().stream()
+                        .filter(entry -> entry.getValue().hasOldPartition)
+                        .map(entry -> entry.getValue().partition)
+                        .collect(Collectors.toList()), tableSnapshot);
+
+      } catch (InterruptedException | ExecutionException e) {
+        throw new HiveException("Exception when loading " + validPartitions.size()
+                + " in table " + tbl.getTableName()
+                + " with loadPath=" + loadPath);
+      } catch (TException e) {
+        LOG.error(StringUtils.stringifyException(e));
+        throw new HiveException(e);
+      } catch (Exception e) {
+
+        StringBuffer logMsg = new StringBuffer();
+        logMsg.append("Exception when loading partitionsToAdd with parameters ");
+        logMsg.append("partPaths=");
+        validPartitions.forEach(path -> logMsg.append(path + ", "));
+        logMsg.append("table=" + tbl.getTableName() + ", ").
+                append("partSpec=" + partSpec + ", ").
+                append("loadFileType=" + loadFileType.toString() + ", ").
+                append("listBucketingLevel=" + numLB + ", ").
+                append("isAcid=" + isAcid + ", ").
+                append("resetStatistics=" + resetStatistics);
+
+        LOG.error(logMsg.toString(), e);
+        throw e;
+      } finally {
+        LOG.debug("Cancelling " + futures.size() + " dynamic loading tasks");
+        executor.shutdownNow();
+      }
+
+      try {
+        if (isAcid) {
+          List<String> partNames =
+                  result.values().stream().map(Partition::getName).collect(Collectors.toList());
+          getMSC().addDynamicPartitions(parentSession.getTxnMgr().getCurrentTxnId(), writeId,
+                  tbl.getDbName(), tbl.getTableName(), partNames,
+                  AcidUtils.toDataOperationType(operation));
+        }
+        LOG.info("Loaded " + result.size() + "partitionsToAdd");
+
+        perfLogger.PerfLogEnd("MoveTask", PerfLogger.LOAD_DYNAMIC_PARTITIONS);
+
+        return result;
+      } catch (TException te) {
+        LOG.error(StringUtils.stringifyException(te));
+        throw new HiveException("Exception updating metastore for acid table "
+            + tableName + " with partitions " + result.values(), te);
+      }
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
         }
       }
-
-      setStatsPropAndAlterPartitions(resetStatistics, tbl,
-              partitionDetailsMap.entrySet().stream()
-                      .filter(entry -> entry.getValue().hasOldPartition)
-                      .map(entry -> entry.getValue().partition)
-                      .collect(Collectors.toList()), tableSnapshot);
-
-    } catch (InterruptedException | ExecutionException e) {
-      throw new HiveException("Exception when loading " + validPartitions.size()
-              + " in table " + tbl.getTableName()
-              + " with loadPath=" + loadPath);
-    } catch (TException e) {
-      LOG.error(StringUtils.stringifyException(e));
-      throw new HiveException(e);
-    } catch (Exception e) {
-
-      StringBuffer logMsg = new StringBuffer();
-      logMsg.append("Exception when loading partitionsToAdd with parameters ");
-      logMsg.append("partPaths=");
-      validPartitions.forEach(path -> logMsg.append(path + ", "));
-      logMsg.append("table=" + tbl.getTableName() + ", ").
-              append("partSpec=" + partSpec + ", ").
-              append("loadFileType=" + loadFileType.toString() + ", ").
-              append("listBucketingLevel=" + numLB + ", ").
-              append("isAcid=" + isAcid + ", ").
-              append("resetStatistics=" + resetStatistics);
-
-      LOG.error(logMsg.toString(), e);
-      throw e;
-    } finally {
-      LOG.debug("Cancelling " + futures.size() + " dynamic loading tasks");
-      executor.shutdownNow();
-    }
-
-    try {
-      if (isAcid) {
-        List<String> partNames =
-                result.values().stream().map(Partition::getName).collect(Collectors.toList());
-        getMSC().addDynamicPartitions(parentSession.getTxnMgr().getCurrentTxnId(), writeId,
-                tbl.getDbName(), tbl.getTableName(), partNames,
-                AcidUtils.toDataOperationType(operation));
-      }
-      LOG.info("Loaded " + result.size() + "partitionsToAdd");
-
-      perfLogger.PerfLogEnd("MoveTask", PerfLogger.LOAD_DYNAMIC_PARTITIONS);
-
-      return result;
-    } catch (TException te) {
-      LOG.error(StringUtils.stringifyException(te));
-      throw new HiveException("Exception updating metastore for acid table "
-          + tableName + " with partitions " + result.values(), te);
     }
   }
 
@@ -2987,109 +3101,144 @@ private void constructOneLBLocationMap(FileStatus fSta,
    */
   @VisibleForTesting
   public Partition createPartition(Table tbl, Map<String, String> partSpec) throws HiveException {
+    boolean txnOpened = false;
     try {
       org.apache.hadoop.hive.metastore.api.Partition part =
           Partition.createMetaPartitionObject(tbl, partSpec, null);
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       AcidUtils.TableSnapshot tableSnapshot = AcidUtils.getTableSnapshot(conf, tbl);
       part.setWriteId(tableSnapshot != null ? tableSnapshot.getWriteId() : 0);
       return new Partition(tbl, getMSC().add_partition(part));
     } catch (Exception e) {
       LOG.error(StringUtils.stringifyException(e));
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
 
   public List<Partition> createPartitions(AlterTableAddPartitionDesc addPartitionDesc) throws HiveException {
-    // TODO: catalog name everywhere in this method
-    Table tbl = getTable(addPartitionDesc.getDbName(), addPartitionDesc.getTableName());
-    int size = addPartitionDesc.getPartitionCount();
-    List<org.apache.hadoop.hive.metastore.api.Partition> in =
-        new ArrayList<org.apache.hadoop.hive.metastore.api.Partition>(size);
-    long writeId;
-    String validWriteIdList;
-
-    // In case of replication, get the writeId from the source and use valid write Id list
-    // for replication.
-    if (addPartitionDesc.getReplicationSpec().isInReplicationScope() &&
-        addPartitionDesc.getPartition(0).getWriteId() > 0) {
-      writeId = addPartitionDesc.getPartition(0).getWriteId();
-      // We need a valid writeId list for a transactional change. During replication we do not
-      // have a valid writeId list which was used for this on the source. But we know for sure
-      // that the writeId associated with it was valid then (otherwise the change would have
-      // failed on the source). So use a valid transaction list with only that writeId.
-      validWriteIdList = new ValidReaderWriteIdList(TableName.getDbTable(tbl.getDbName(),
-                                                                          tbl.getTableName()),
-                                                    new long[0], new BitSet(), writeId).writeToString();
-    } else {
-      AcidUtils.TableSnapshot tableSnapshot = AcidUtils.getTableSnapshot(conf, tbl, true);
-      if (tableSnapshot != null && tableSnapshot.getWriteId() > 0) {
-        writeId = tableSnapshot.getWriteId();
-        validWriteIdList = tableSnapshot.getValidWriteIdList();
-      } else {
-        writeId = -1;
-        validWriteIdList = null;
-      }
-    }
-    for (int i = 0; i < size; ++i) {
-      org.apache.hadoop.hive.metastore.api.Partition tmpPart =
-          convertAddSpecToMetaPartition(tbl, addPartitionDesc.getPartition(i), conf);
-      if (tmpPart != null && writeId > 0) {
-        tmpPart.setWriteId(writeId);
-      }
-      in.add(tmpPart);
-    }
-    List<Partition> out = new ArrayList<Partition>();
+    boolean txnOpened = false;
     try {
-      if (!addPartitionDesc.getReplicationSpec().isInReplicationScope()){
-        // TODO: normally, the result is not necessary; might make sense to pass false
-        for (org.apache.hadoop.hive.metastore.api.Partition outPart
-            : getMSC().add_partitions(in, addPartitionDesc.isIfNotExists(), true)) {
-          out.add(new Partition(tbl, outPart));
-        }
-      } else {
+      // TODO: catalog name everywhere in this method
+      Table tbl = getTable(addPartitionDesc.getDbName(), addPartitionDesc.getTableName());
+      int size = addPartitionDesc.getPartitionCount();
+      List<org.apache.hadoop.hive.metastore.api.Partition> in =
+          new ArrayList<org.apache.hadoop.hive.metastore.api.Partition>(size);
+      long writeId;
+      String validWriteIdList;
 
-        // For replication add-ptns, we need to follow a insert-if-not-exist, alter-if-exists scenario.
-        // TODO : ideally, we should push this mechanism to the metastore, because, otherwise, we have
-        // no choice but to iterate over the partitions here.
-
-        List<org.apache.hadoop.hive.metastore.api.Partition> partsToAdd = new ArrayList<>();
-        List<org.apache.hadoop.hive.metastore.api.Partition> partsToAlter = new ArrayList<>();
-        List<String> part_names = new ArrayList<>();
-        for (org.apache.hadoop.hive.metastore.api.Partition p: in){
-          part_names.add(Warehouse.makePartName(tbl.getPartitionKeys(), p.getValues()));
-          try {
-            org.apache.hadoop.hive.metastore.api.Partition ptn =
-                getMSC().getPartition(addPartitionDesc.getDbName(), addPartitionDesc.getTableName(), p.getValues());
-            if (addPartitionDesc.getReplicationSpec().allowReplacementInto(ptn.getParameters())){
-              ReplicationSpec.copyLastReplId(ptn.getParameters(), p.getParameters());
-              partsToAlter.add(p);
-            } // else ptn already exists, but we do nothing with it.
-          } catch (NoSuchObjectException nsoe){
-            // if the object does not exist, we want to add it.
-            partsToAdd.add(p);
+      // In case of replication, get the writeId from the source and use valid write Id list
+      // for replication.
+      if (addPartitionDesc.getReplicationSpec().isInReplicationScope()) {
+        if (addPartitionDesc.getPartition(0).getWriteId() > 0) {
+          writeId = addPartitionDesc.getPartition(0).getWriteId();
+        } else {
+          AcidUtils.TableSnapshot tableSnapshot = AcidUtils.getTableSnapshot(conf, tbl, true);
+          if (tableSnapshot != null && tableSnapshot.getWriteId() > 0) {
+            writeId = tableSnapshot.getWriteId();
+          } else {
+            writeId = -1;
+            validWriteIdList = null;
           }
         }
-        for (org.apache.hadoop.hive.metastore.api.Partition outPart
-            : getMSC().add_partitions(partsToAdd, addPartitionDesc.isIfNotExists(), true)) {
-          out.add(new Partition(tbl, outPart));
+        // We need a valid writeId list for a transactional change. During replication we do not
+        // have a valid writeId list which was used for this on the source. But we know for sure
+        // that the writeId associated with it was valid then (otherwise the change would have
+        // failed on the source). So use a valid transaction list with only that writeId.
+        validWriteIdList = new ValidReaderWriteIdList(TableName.getDbTable(tbl.getDbName(),
+                                                                            tbl.getTableName()),
+                                                      new long[0], new BitSet(), writeId).writeToString();
+      } else {
+        if (AcidUtils.isTransactionalTable(tbl)) {
+          txnOpened = openTxnIfNeeded();
+          // Advance writeId for ddl on transactional table
+          AcidUtils.advanceWriteId(conf, tbl);
         }
-        EnvironmentContext ec = new EnvironmentContext();
-        // In case of replication, statistics is obtained from the source, so do not update those
-        // on replica.
-        ec.putToProperties(StatsSetupConst.DO_NOT_UPDATE_STATS, StatsSetupConst.TRUE);
-        getMSC().alter_partitions(addPartitionDesc.getDbName(), addPartitionDesc.getTableName(),
-            partsToAlter, ec, validWriteIdList, writeId);
-
-        for ( org.apache.hadoop.hive.metastore.api.Partition outPart :
-        getMSC().getPartitionsByNames(addPartitionDesc.getDbName(), addPartitionDesc.getTableName(),part_names)){
-          out.add(new Partition(tbl,outPart));
+        AcidUtils.TableSnapshot tableSnapshot = AcidUtils.getTableSnapshot(conf, tbl, true);
+        if (tableSnapshot != null && tableSnapshot.getWriteId() > 0) {
+          writeId = tableSnapshot.getWriteId();
+          validWriteIdList = tableSnapshot.getValidWriteIdList();
+        } else {
+          writeId = -1;
+          validWriteIdList = null;
         }
       }
-    } catch (Exception e) {
-      LOG.error(StringUtils.stringifyException(e));
-      throw new HiveException(e);
+      for (int i = 0; i < size; ++i) {
+        org.apache.hadoop.hive.metastore.api.Partition tmpPart =
+            convertAddSpecToMetaPartition(tbl, addPartitionDesc.getPartition(i), conf);
+        if (tmpPart != null && writeId > 0) {
+          tmpPart.setWriteId(writeId);
+        }
+        in.add(tmpPart);
+      }
+      List<Partition> out = new ArrayList<Partition>();
+      try {
+        if (!addPartitionDesc.getReplicationSpec().isInReplicationScope()){
+          // TODO: normally, the result is not necessary; might make sense to pass false
+          for (org.apache.hadoop.hive.metastore.api.Partition outPart
+              : getMSC().add_partitions(in, addPartitionDesc.isIfNotExists(), true)) {
+            out.add(new Partition(tbl, outPart));
+          }
+        } else {
+
+          // For replication add-ptns, we need to follow a insert-if-not-exist, alter-if-exists scenario.
+          // TODO : ideally, we should push this mechanism to the metastore, because, otherwise, we have
+          // no choice but to iterate over the partitions here.
+
+          List<org.apache.hadoop.hive.metastore.api.Partition> partsToAdd = new ArrayList<>();
+          List<org.apache.hadoop.hive.metastore.api.Partition> partsToAlter = new ArrayList<>();
+          List<String> part_names = new ArrayList<>();
+          for (org.apache.hadoop.hive.metastore.api.Partition p: in){
+            part_names.add(Warehouse.makePartName(tbl.getPartitionKeys(), p.getValues()));
+            try {
+              org.apache.hadoop.hive.metastore.api.Partition ptn =
+                  getMSC().getPartition(addPartitionDesc.getDbName(), addPartitionDesc.getTableName(), p.getValues());
+              if (addPartitionDesc.getReplicationSpec().allowReplacementInto(ptn.getParameters())){
+                ReplicationSpec.copyLastReplId(ptn.getParameters(), p.getParameters());
+                partsToAlter.add(p);
+              } // else ptn already exists, but we do nothing with it.
+            } catch (NoSuchObjectException nsoe){
+              // if the object does not exist, we want to add it.
+              partsToAdd.add(p);
+            }
+          }
+          for (org.apache.hadoop.hive.metastore.api.Partition outPart
+              : getMSC().add_partitions(partsToAdd, addPartitionDesc.isIfNotExists(), true)) {
+            out.add(new Partition(tbl, outPart));
+          }
+          EnvironmentContext ec = new EnvironmentContext();
+          // In case of replication, statistics is obtained from the source, so do not update those
+          // on replica.
+          ec.putToProperties(StatsSetupConst.DO_NOT_UPDATE_STATS, StatsSetupConst.TRUE);
+          getMSC().alter_partitions(addPartitionDesc.getDbName(), addPartitionDesc.getTableName(),
+              partsToAlter, ec, validWriteIdList, writeId);
+
+          for ( org.apache.hadoop.hive.metastore.api.Partition outPart :
+          getMSC().getPartitionsByNames(addPartitionDesc.getDbName(), addPartitionDesc.getTableName(),part_names)){
+            out.add(new Partition(tbl,outPart));
+          }
+        }
+      } catch (Exception e) {
+        LOG.error(StringUtils.stringifyException(e));
+        throw new HiveException(e);
+      }
+      return out;
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
-    return out;
   }
 
   public static org.apache.hadoop.hive.metastore.api.Partition convertAddSpecToMetaPartition(
@@ -3428,12 +3577,25 @@ private void constructOneLBLocationMap(FileStatus fSta,
 
   public boolean dropPartition(String dbName, String tableName, List<String> partVals, PartitionDropOptions options)
       throws HiveException {
+    boolean txnOpened = false;
     try {
+      Table tbl = getTable(dbName, tableName);
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        // Advance writeId for ddl on transactional table
+        txnOpened = openTxnIfNeeded();
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       return getMSC().dropPartition(dbName, tableName, partVals, options);
     } catch (NoSuchObjectException e) {
       throw new HiveException("Partition or table doesn't exist.", e);
     } catch (Exception e) {
       throw new HiveException(e.getMessage(), e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
 
@@ -3536,8 +3698,14 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public List<Partition> dropPartitions(String dbName, String tblName,
       List<AlterTableDropPartitionDesc.PartitionDesc> partSpecs, PartitionDropOptions dropOptions)
       throws HiveException {
+    boolean txnOpened = false;
     try {
       Table tbl = getTable(dbName, tblName);
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       List<org.apache.hadoop.hive.metastore.utils.ObjectPair<Integer, byte[]>> partExprs =
           new ArrayList<>(partSpecs.size());
       for (AlterTableDropPartitionDesc.PartitionDesc partSpec : partSpecs) {
@@ -3551,6 +3719,12 @@ private void constructOneLBLocationMap(FileStatus fSta,
       throw new HiveException("Partition or table doesn't exist.", e);
     } catch (Exception e) {
       throw new HiveException(e.getMessage(), e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().commitTxn();
+        }
+      }
     }
   }
 
@@ -4981,7 +5155,20 @@ private void constructOneLBLocationMap(FileStatus fSta,
   public List<Partition> exchangeTablePartitions(Map<String, String> partitionSpecs,
       String sourceDb, String sourceTable, String destDb,
       String destinationTableName) throws HiveException {
+    boolean txnOpened = false;
     try {
+      Table srcTbl = getTable(sourceDb, sourceTable);
+      if (AcidUtils.isTransactionalTable(srcTbl) && !inReplication(srcTbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, srcTbl);
+      }
+      Table descTbl = getTable(destDb, destinationTableName);
+      if (AcidUtils.isTransactionalTable(descTbl) && !inReplication(descTbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, descTbl);
+      }
       List<org.apache.hadoop.hive.metastore.api.Partition> partitions =
         getMSC().exchange_partitions(partitionSpecs, sourceDb, sourceTable, destDb,
         destinationTableName);
@@ -4990,6 +5177,12 @@ private void constructOneLBLocationMap(FileStatus fSta,
     } catch (Exception ex) {
       LOG.error(StringUtils.stringifyException(ex));
       throw new HiveException(ex);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().rollbackTxn();
+        }
+      }
     }
   }
 
@@ -5107,6 +5300,7 @@ private void constructOneLBLocationMap(FileStatus fSta,
         metaStoreClient = HiveMetaStoreClient.newSynchronizedClient(metaStoreClient);
       }
     }
+    metaStoreClient.setValidWriteIdList(conf.get(ValidTxnWriteIdList.VALID_TABLES_WRITEIDS_KEY));
     return metaStoreClient;
   }
 
@@ -5216,21 +5410,47 @@ private void constructOneLBLocationMap(FileStatus fSta,
 
   public boolean deleteTableColumnStatistics(String dbName, String tableName, String colName)
     throws HiveException {
+    boolean txnOpened = false;
     try {
+      Table tbl = getTable(dbName, tableName);
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       return getMSC().deleteTableColumnStatistics(dbName, tableName, colName);
     } catch(Exception e) {
       LOG.debug(StringUtils.stringifyException(e));
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().rollbackTxn();
+        }
+      }
     }
   }
 
   public boolean deletePartitionColumnStatistics(String dbName, String tableName, String partName,
     String colName) throws HiveException {
+    boolean txnOpened = false;
       try {
+        Table tbl = getTable(dbName, tableName);
+        if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+          txnOpened = openTxnIfNeeded();
+          // Advance writeId for ddl on transactional table
+          AcidUtils.advanceWriteId(conf, tbl);
+        }
         return getMSC().deletePartitionColumnStatistics(dbName, tableName, partName, colName);
       } catch(Exception e) {
         LOG.debug(StringUtils.stringifyException(e));
         throw new HiveException(e);
+      } finally {
+        if (txnOpened) {
+          if (SessionState.get().getTxnMgr().isTxnOpen()) {
+            SessionState.get().getTxnMgr().rollbackTxn();
+          }
+        }
       }
     }
 
@@ -5475,12 +5695,25 @@ private void constructOneLBLocationMap(FileStatus fSta,
 
   public void dropConstraint(String dbName, String tableName, String constraintName)
     throws HiveException, NoSuchObjectException {
+    boolean txnOpened = false;
     try {
+      Table tbl = getTable(dbName, tableName);
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().dropConstraint(dbName, tableName, constraintName);
     } catch (NoSuchObjectException e) {
       throw e;
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().rollbackTxn();
+        }
+      }
     }
   }
 
@@ -5806,55 +6039,133 @@ private void constructOneLBLocationMap(FileStatus fSta,
 
   public void addPrimaryKey(List<SQLPrimaryKey> primaryKeyCols)
     throws HiveException, NoSuchObjectException {
+    boolean txnOpened = false;
     try {
+      Table tbl = getTable(primaryKeyCols.get(0).getTable_db(), primaryKeyCols.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addPrimaryKey(primaryKeyCols);
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().rollbackTxn();
+        }
+      }
     }
   }
 
   public void addForeignKey(List<SQLForeignKey> foreignKeyCols)
     throws HiveException, NoSuchObjectException {
+    boolean txnOpened = false;
     try {
+      Table tbl = getTable(foreignKeyCols.get(0).getFktable_db(), foreignKeyCols.get(0).getFktable_name());
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addForeignKey(foreignKeyCols);
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().rollbackTxn();
+        }
+      }
     }
   }
 
   public void addUniqueConstraint(List<SQLUniqueConstraint> uniqueConstraintCols)
     throws HiveException, NoSuchObjectException {
+    boolean txnOpened = false;
     try {
+      Table tbl = getTable(uniqueConstraintCols.get(0).getTable_db(), uniqueConstraintCols.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addUniqueConstraint(uniqueConstraintCols);
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().rollbackTxn();
+        }
+      }
     }
   }
 
   public void addNotNullConstraint(List<SQLNotNullConstraint> notNullConstraintCols)
     throws HiveException, NoSuchObjectException {
+    boolean txnOpened = false;
     try {
+      Table tbl = getTable(notNullConstraintCols.get(0).getTable_db(), notNullConstraintCols.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addNotNullConstraint(notNullConstraintCols);
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().rollbackTxn();
+        }
+      }
     }
   }
 
   public void addDefaultConstraint(List<SQLDefaultConstraint> defaultConstraints)
       throws HiveException, NoSuchObjectException {
+    boolean txnOpened = false;
     try {
+      Table tbl = getTable(defaultConstraints.get(0).getTable_db(), defaultConstraints.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addDefaultConstraint(defaultConstraints);
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().rollbackTxn();
+        }
+      }
     }
   }
 
   public void addCheckConstraint(List<SQLCheckConstraint> checkConstraints)
       throws HiveException, NoSuchObjectException {
+    boolean txnOpened = false;
     try {
+      Table tbl = getTable(checkConstraints.get(0).getTable_db(), checkConstraints.get(0).getTable_name());
+      if (AcidUtils.isTransactionalTable(tbl) && !inReplication(tbl)) {
+        txnOpened = openTxnIfNeeded();
+        // Advance writeId for ddl on transactional table
+        AcidUtils.advanceWriteId(conf, tbl);
+      }
       getMSC().addCheckConstraint(checkConstraints);
     } catch (Exception e) {
       throw new HiveException(e);
+    } finally {
+      if (txnOpened) {
+        if (SessionState.get().getTxnMgr().isTxnOpen()) {
+          SessionState.get().getTxnMgr().rollbackTxn();
+        }
+      }
     }
   }
 
@@ -6064,6 +6375,37 @@ private void constructOneLBLocationMap(FileStatus fSta,
       return storageHandler == null ? null : storageHandler.getStorageHandlerInfo(table.getTTable());
     } catch (Exception e) {
       throw new HiveException(e);
+    }
+  }
+
+  private boolean openTxnIfNeeded() throws HiveException {
+    try {
+      if (SessionState.get().getTxnMgr() == null) {
+        SessionState.get().initTxnMgr(conf);
+      }
+      HiveTxnManager txnMgr = SessionState.get().getTxnMgr();
+      if (!txnMgr.isTxnOpen()) {
+        Context ctx = new Context(conf);
+        txnMgr.openTxn(ctx, SessionState.getUserFromAuthenticator());
+        return true;
+      }
+      return false;
+    } catch (Exception e) {
+      throw new HiveException(e);
+    }
+  }
+
+  public void clearValidWriteIdList() {
+    if (metaStoreClient != null) {
+      metaStoreClient.clearValidWriteIdList();
+    }
+  }
+
+  boolean inReplication(Table tbl) {
+    if (tbl.getParameters().get(ReplicationSpec.KEY.CURR_STATE_ID.toString()) != null) {
+      return true;
+    } else {
+      return false;
     }
   }
 }

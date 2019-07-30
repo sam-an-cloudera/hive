@@ -32,6 +32,12 @@ public class ValidTxnWriteIdList {
    */
   public static final String VALID_TABLES_WRITEIDS_KEY = "hive.txn.tables.valid.writeids";
 
+  /**
+   * Key used to store valid write id list for compactor in a
+   * {@link org.apache.hadoop.conf.Configuration} object.
+   */
+  public static final String COMPACTOR_VALID_TABLES_WRITEIDS_KEY = "hive.compactor.txn.tables.valid.writeids";
+
   // Transaction for which the list of tables valid write Ids are populated
   private Long txnId;
 

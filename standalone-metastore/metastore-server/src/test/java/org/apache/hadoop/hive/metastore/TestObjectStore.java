@@ -282,7 +282,7 @@ public class TestObjectStore {
     Assert.assertEquals("new" + TABLE1, tables.get(0));
 
     // Verify fields were altered during the alterTable operation
-    Table alteredTable = objectStore.getTable(DEFAULT_CATALOG_NAME, DB1, "new" + TABLE1);
+    Table alteredTable = objectStore.getTable(DEFAULT_CATALOG_NAME, DB1, "new" + TABLE1, null);
     Assert.assertEquals("Owner of table was not altered", newTbl1.getOwner(), alteredTable.getOwner());
     Assert.assertEquals("Owner type of table was not altered", newTbl1.getOwnerType(), alteredTable.getOwnerType());
 
@@ -370,19 +370,19 @@ public class TestObjectStore {
     objectStore.addPartition(part2);
 
     Deadline.startTimer("getPartition");
-    List<Partition> partitions = objectStore.getPartitions(DEFAULT_CATALOG_NAME, DB1, TABLE1, 10);
+    List<Partition> partitions = objectStore.getPartitions(DEFAULT_CATALOG_NAME, DB1, TABLE1, 10, null);
     Assert.assertEquals(2, partitions.size());
     Assert.assertEquals(111, partitions.get(0).getCreateTime());
     Assert.assertEquals(222, partitions.get(1).getCreateTime());
 
-    int numPartitions = objectStore.getNumPartitionsByFilter(DEFAULT_CATALOG_NAME, DB1, TABLE1, "");
+    int numPartitions = objectStore.getNumPartitionsByFilter(DEFAULT_CATALOG_NAME, DB1, TABLE1, "", null);
     Assert.assertEquals(partitions.size(), numPartitions);
 
-    numPartitions = objectStore.getNumPartitionsByFilter(DEFAULT_CATALOG_NAME, DB1, TABLE1, "country = \"US\"");
+    numPartitions = objectStore.getNumPartitionsByFilter(DEFAULT_CATALOG_NAME, DB1, TABLE1, "country = \"US\"", null);
     Assert.assertEquals(2, numPartitions);
 
     objectStore.dropPartition(DEFAULT_CATALOG_NAME, DB1, TABLE1, value1);
-    partitions = objectStore.getPartitions(DEFAULT_CATALOG_NAME, DB1, TABLE1, 10);
+    partitions = objectStore.getPartitions(DEFAULT_CATALOG_NAME, DB1, TABLE1, 10, null);
     Assert.assertEquals(1, partitions.size());
     Assert.assertEquals(222, partitions.get(0).getCreateTime());
 
@@ -788,7 +788,7 @@ public class TestObjectStore {
           List<String> tbls = store.getAllTables(DEFAULT_CATALOG_NAME, db);
           for (String tbl : tbls) {
             Deadline.startTimer("getPartition");
-            List<Partition> parts = store.getPartitions(DEFAULT_CATALOG_NAME, db, tbl, 100);
+            List<Partition> parts = store.getPartitions(DEFAULT_CATALOG_NAME, db, tbl, 100, null);
             for (Partition part : parts) {
               store.dropPartition(DEFAULT_CATALOG_NAME, db, tbl, part.getValues());
             }

@@ -476,7 +476,7 @@ public final class TransactionalValidationListener extends MetaStorePreEventList
     try {
       RawStore rawStore = hmsHandler.getMS();
       String catName = getTableCatalog(table);
-      List<Partition> partitions = rawStore.getPartitions(catName, table.getDbName(), table.getTableName(), -1);
+      List<Partition> partitions = rawStore.getPartitions(catName, table.getDbName(), table.getTableName(), -1, null);
       return partitions;
     } catch (Exception err) {
       String msg = "Error getting partitions for " + Warehouse.getQualifiedName(table);

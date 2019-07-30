@@ -67,7 +67,7 @@ public class MetaStoreCompactorThread extends CompactorThread implements MetaSto
 
   @Override Table resolveTable(CompactionInfo ci) throws MetaException {
     try {
-      return rs.getTable(getDefaultCatalog(conf), ci.dbname, ci.tableName);
+      return rs.getTable(getDefaultCatalog(conf), ci.dbname, ci.tableName, null);
     } catch (MetaException e) {
       LOG.error("Unable to find table " + ci.getFullTableName() + ", " + e.getMessage());
       throw e;
@@ -88,7 +88,7 @@ public class MetaStoreCompactorThread extends CompactorThread implements MetaSto
   @Override List<Partition> getPartitionsByNames(CompactionInfo ci) throws MetaException {
     try {
       return rs.getPartitionsByNames(getDefaultCatalog(conf), ci.dbname, ci.tableName,
-          Collections.singletonList(ci.partName));
+          Collections.singletonList(ci.partName), null);
     } catch (MetaException e) {
       LOG.error("Unable to get partitions by name for CompactionInfo=" + ci);
       throw e;

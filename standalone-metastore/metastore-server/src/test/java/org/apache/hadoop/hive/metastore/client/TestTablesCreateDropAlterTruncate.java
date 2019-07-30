@@ -240,6 +240,7 @@ public class TestTablesCreateDropAlterTruncate extends MetaStoreClientTest {
     table.setParameters(createdTable.getParameters());
     table.setCreationMetadata(createdTable.getCreationMetadata());
     table.setWriteId(createdTable.getWriteId());
+    table.setTemporary(false);
 
     Assert.assertTrue(createdTable.isSetId());
     createdTable.unsetId();
@@ -713,6 +714,7 @@ public class TestTablesCreateDropAlterTruncate extends MetaStoreClientTest {
     newTable.setCreateTime(alteredTable.getCreateTime());
     newTable.setCreationMetadata(alteredTable.getCreationMetadata());
     newTable.setWriteId(alteredTable.getWriteId());
+    newTable.setTemporary(false);
 
     Assert.assertTrue(alteredTable.isSetId());
     alteredTable.unsetId();

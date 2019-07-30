@@ -508,7 +508,7 @@ public final class Util {
                                   @Nullable Map<String, String> parameters,
                                   @NotNull List<String> arguments,
                                   int npartitions) throws TException {
-    Table table = client.getTable(dbName, tableName);
+    Table table = client.getTable(dbName, tableName, null);
     client.addPartitions(createManyPartitions(table, parameters, arguments, npartitions));
     return null;
   }

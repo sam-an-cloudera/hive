@@ -75,10 +75,10 @@ public class TestTxnCommands3 extends TxnCommandsBaseForTests {
 
     String testQuery = "select ROW__ID, a, b, INPUT__FILE__NAME from mydb1.S";
     String[][] expected = new String[][] {
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t1\t2",
-            "s/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t4\t6",
-            "s/delta_0000002_0000002_0000/bucket_00000"}};
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t1\t2",
+            "s/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t4\t6",
+            "s/delta_0000003_0000003_0000/bucket_00000"}};
     checkResult(expected, testQuery, false, "check data", LOG);
 
 
@@ -101,9 +101,9 @@ public class TestTxnCommands3 extends TxnCommandsBaseForTests {
         "select count(*) from COMPACTION_QUEUE where CQ_TABLE='s'"));
     Assert.assertEquals(1, TxnDbUtil.countQueryAgent(hiveConf,
         "select count(*) from WRITE_SET where WS_TABLE='s'"));
-    Assert.assertEquals(3, TxnDbUtil.countQueryAgent(hiveConf,
+    Assert.assertEquals(5, TxnDbUtil.countQueryAgent(hiveConf,
         "select count(*) from TXN_TO_WRITE_ID where T2W_TABLE='s'"));
-    Assert.assertEquals(1, TxnDbUtil.countQueryAgent(hiveConf,
+    Assert.assertEquals(2, TxnDbUtil.countQueryAgent(hiveConf,
         "select count(*) from NEXT_WRITE_ID where NWI_TABLE='s'"));
 
     runStatementOnDriver("alter table mydb1.S RENAME TO mydb2.bar");
@@ -116,9 +116,9 @@ public class TestTxnCommands3 extends TxnCommandsBaseForTests {
         "select count(*) from COMPACTION_QUEUE where CQ_TABLE='bar'"));
     Assert.assertEquals(1, TxnDbUtil.countQueryAgent(hiveConf,
         "select count(*) from WRITE_SET where WS_TABLE='bar'"));
-    Assert.assertEquals(4, TxnDbUtil.countQueryAgent(hiveConf,
+    Assert.assertEquals(7, TxnDbUtil.countQueryAgent(hiveConf,
         "select count(*) from TXN_TO_WRITE_ID where T2W_TABLE='bar'"));
-    Assert.assertEquals(1, TxnDbUtil.countQueryAgent(hiveConf,
+    Assert.assertEquals(3, TxnDbUtil.countQueryAgent(hiveConf,
         "select count(*) from NEXT_WRITE_ID where NWI_TABLE='bar'"));
   }
 
@@ -166,10 +166,10 @@ public class TestTxnCommands3 extends TxnCommandsBaseForTests {
         "select ROW__ID, a, b from T order by a, b" :
         "select ROW__ID, a, b, INPUT__FILE__NAME from T order by a, b";
     String[][] expected = new String[][]{
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t4\t5",
-            "warehouse/t/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t4\t6",
-            "warehouse/t/delta_0000002_0000002_0000/bucket_00000"}};
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t4\t5",
+            "warehouse/t/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t4\t6",
+            "warehouse/t/delta_0000003_0000003_0000/bucket_00000"}};
     checkResult(expected, testQuery, isVectorized, "after delete", LOG);
 
     runStatementOnDriver("alter table T compact 'MAJOR'");
@@ -184,9 +184,9 @@ public class TestTxnCommands3 extends TxnCommandsBaseForTests {
         .startsWith("job_local"));
 
     String[][] expected2 = new String[][]{
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t4\t5",
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t4\t5",
             "warehouse/t/base_0000001/bucket_00000"},
-        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t4\t6",
+        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t4\t6",
             "warehouse/t/base_0000002/bucket_00000"}};
     checkResult(expected2, testQuery, isVectorized, "after compaction", LOG);
   }
@@ -272,29 +272,29 @@ public class TestTxnCommands3 extends TxnCommandsBaseForTests {
         "select ROW__ID, a, b, ds from acid_uap order by ds, a, b" :
         "select ROW__ID, a, b, ds, INPUT__FILE__NAME from acid_uap order by ds, a, b";
     String[][] expected = new String[][]{
-        {"{\"writeid\":2,\"bucketid\":536936448,\"rowid\":0}\t1\tbah\ttoday",
-            "warehouse/acid_uap/ds=today/delta_0000002_0000002_0000/bucket_00001"},
-        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t2\tyah\ttoday",
-            "warehouse/acid_uap/ds=today/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":3,\"bucketid\":536936448,\"rowid\":0}\t1\tbah\ttoday",
+            "warehouse/acid_uap/ds=today/delta_0000003_0000003_0000/bucket_00001"},
+        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t2\tyah\ttoday",
+            "warehouse/acid_uap/ds=today/delta_0000003_0000003_0000/bucket_00000"},
 
-        {"{\"writeid\":1,\"bucketid\":536936448,\"rowid\":0}\t1\tbah\ttomorrow",
-            "warehouse/acid_uap/ds=tomorrow/delta_0000001_0000001_0000/bucket_00001"},
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t2\tyah\ttomorrow",
-            "warehouse/acid_uap/ds=tomorrow/delta_0000001_0000001_0000/bucket_00000"}};
+        {"{\"writeid\":2,\"bucketid\":536936448,\"rowid\":0}\t1\tbah\ttomorrow",
+            "warehouse/acid_uap/ds=tomorrow/delta_0000002_0000002_0000/bucket_00001"},
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t2\tyah\ttomorrow",
+            "warehouse/acid_uap/ds=tomorrow/delta_0000002_0000002_0000/bucket_00000"}};
     checkResult(expected, testQuery, isVectorized, "after insert", LOG);
 
     runStatementOnDriver("update acid_uap set b = 'fred'");
 
     String[][] expected2 = new String[][]{
-        {"{\"writeid\":3,\"bucketid\":536936448,\"rowid\":0}\t1\tfred\ttoday",
-            "warehouse/acid_uap/ds=today/delta_0000003_0000003_0000/bucket_00001"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t2\tfred\ttoday",
-            "warehouse/acid_uap/ds=today/delta_0000003_0000003_0000/bucket_00000"},
+        {"{\"writeid\":4,\"bucketid\":536936448,\"rowid\":0}\t1\tfred\ttoday",
+            "warehouse/acid_uap/ds=today/delta_0000004_0000004_0000/bucket_00001"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":0}\t2\tfred\ttoday",
+            "warehouse/acid_uap/ds=today/delta_0000004_0000004_0000/bucket_00000"},
 
-        {"{\"writeid\":3,\"bucketid\":536936448,\"rowid\":0}\t1\tfred\ttomorrow",
-            "warehouse/acid_uap/ds=tomorrow/delta_0000003_0000003_0000/bucket_00001"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t2\tfred\ttomorrow",
-            "warehouse/acid_uap/ds=tomorrow/delta_0000003_0000003_0000/bucket_00000"}};
+        {"{\"writeid\":4,\"bucketid\":536936448,\"rowid\":0}\t1\tfred\ttomorrow",
+            "warehouse/acid_uap/ds=tomorrow/delta_0000004_0000004_0000/bucket_00001"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":0}\t2\tfred\ttomorrow",
+            "warehouse/acid_uap/ds=tomorrow/delta_0000004_0000004_0000/bucket_00000"}};
     checkResult(expected2, testQuery, isVectorized, "after update", LOG);
   }
   @Test
@@ -323,10 +323,10 @@ public class TestTxnCommands3 extends TxnCommandsBaseForTests {
          └── bucket_00000*/
     String testQuery = "select ROW__ID, a, b, INPUT__FILE__NAME from T";
     String[][] expected = new String[][] {
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t0\t2",
-            "t/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t1\t4",
-            "t/delta_0000002_0000002_0000/bucket_00000"}};
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t0\t2",
+            "t/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t1\t4",
+            "t/delta_0000003_0000003_0000/bucket_00000"}};
     checkResult(expected, testQuery, false, "check data", LOG);
 
 
@@ -351,9 +351,9 @@ public class TestTxnCommands3 extends TxnCommandsBaseForTests {
         FileUtils.HIDDEN_FILES_PATH_FILTER);
 
     String[] expectedList = new String[] {
-        "/t/delta_0000001_0000002_v0000019",
-        "/t/delta_0000001_0000001_0000",
+        "/t/delta_0000002_0000003_v0000019",
         "/t/delta_0000002_0000002_0000",
+        "/t/delta_0000003_0000003_0000",
     };
     checkExpectedFiles(actualList, expectedList, warehousePath.toString());
 
@@ -384,7 +384,7 @@ public class TestTxnCommands3 extends TxnCommandsBaseForTests {
     runCleaner(hiveConf);
 
     expectedList = new String[] {
-        "/t/delta_0000001_0000003_v0000022"
+        "/t/delta_0000002_0000004_v0000022"
     };
     actualList = fs.listStatus(new Path(warehousePath + "/t"),
         FileUtils.HIDDEN_FILES_PATH_FILTER);

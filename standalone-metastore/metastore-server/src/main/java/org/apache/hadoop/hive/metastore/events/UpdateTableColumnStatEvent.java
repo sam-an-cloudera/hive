@@ -38,22 +38,25 @@ public class UpdateTableColumnStatEvent extends ListenerEvent {
   private long writeId;
   private Map<String, String> parameters;
   private Table tableObj;
+  private String writeIds;
 
   /**
    * @param colStats Columns statistics Info.
    * @param tableObj table object
    * @param parameters table parameters to be updated after stats are updated.
    * @param writeId writeId for the query.
+   * @param writeIds writeIds for the query
    * @param handler handler that is firing the event
    */
   public UpdateTableColumnStatEvent(ColumnStatistics colStats, Table tableObj,
                                     Map<String, String> parameters,
-                                    long writeId, IHMSHandler handler) {
+                                    long writeId, String writeIds, IHMSHandler handler) {
     super(true, handler);
     this.colStats = colStats;
     this.writeId = writeId;
     this.parameters = parameters;
     this.tableObj = tableObj;
+    this.writeIds = writeIds;
   }
 
   /**
@@ -74,6 +77,10 @@ public class UpdateTableColumnStatEvent extends ListenerEvent {
 
   public long getWriteId() {
     return writeId;
+  }
+
+  public String getWriteIds() {
+    return writeIds;
   }
 
   public Map<String, String> getTableParameters() {

@@ -214,7 +214,7 @@ public class BenchmarkTool implements Runnable {
         client.createDatabase(dbName);
       }
 
-      if (client.tableExists(dbName, tableName)) {
+      if (client.tableExists(dbName, tableName, null)) {
         client.dropTable(dbName, tableName);
       }
 

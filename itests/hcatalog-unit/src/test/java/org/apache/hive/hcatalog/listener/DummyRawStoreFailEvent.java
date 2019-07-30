@@ -264,11 +264,6 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
   }
 
   @Override
-  public Table getTable(String catName, String dbName, String tableName) throws MetaException {
-    return objectStore.getTable(catName, dbName, tableName);
-  }
-
-  @Override
   public Table getTable(String catName, String dbName, String tableName,
                         String writeIdList) throws MetaException {
     return objectStore.getTable(catName, dbName, tableName, writeIdList);
@@ -278,12 +273,6 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
   public boolean addPartition(Partition part)
       throws InvalidObjectException, MetaException {
     return objectStore.addPartition(part);
-  }
-
-  @Override
-  public Partition getPartition(String catName, String dbName, String tableName, List<String> partVals)
-      throws MetaException, NoSuchObjectException {
-    return objectStore.getPartition(catName, dbName, tableName, partVals);
   }
 
   @Override
@@ -305,15 +294,15 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
   }
 
   @Override
-  public List<Partition> getPartitions(String catName, String dbName, String tableName, int max)
+  public List<Partition> getPartitions(String catName, String dbName, String tableName, int max, String writeIdList)
       throws MetaException, NoSuchObjectException {
-    return objectStore.getPartitions(catName, dbName, tableName, max);
+    return objectStore.getPartitions(catName, dbName, tableName, max, writeIdList);
   }
 
   @Override
   public Map<String, String> getPartitionLocations(String catName, String dbName, String tblName,
-      String baseLocationToNotShow, int max) {
-    return objectStore.getPartitionLocations(catName, dbName, tblName, baseLocationToNotShow, max);
+      String baseLocationToNotShow, int max, String writeIdList) {
+    return objectStore.getPartitionLocations(catName, dbName, tblName, baseLocationToNotShow, max, writeIdList);
   }
 
   @Override
@@ -378,9 +367,9 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
   }
 
   @Override
-  public List<String> listPartitionNames(String catName, String dbName, String tblName, short maxParts)
+  public List<String> listPartitionNames(String catName, String dbName, String tblName, short maxParts, String writeIdList)
       throws MetaException {
-    return objectStore.listPartitionNames(catName, dbName, tblName, maxParts);
+    return objectStore.listPartitionNames(catName, dbName, tblName, maxParts, writeIdList);
   }
 
   @Override
@@ -388,7 +377,7 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
                                                      String tbl_name, List<FieldSchema> cols,
                                                      boolean applyDistinct, String filter,
                                                      boolean ascending, List<FieldSchema> order,
-                                                     long maxParts) throws MetaException {
+                                                     long maxParts, String writeIdList) throws MetaException {
     return null;
   }
 
@@ -416,42 +405,43 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
 
   @Override
   public List<Partition> getPartitionsByFilter(String catName, String dbName, String tblName,
-                                               String filter, short maxParts) throws MetaException, NoSuchObjectException {
-    return objectStore.getPartitionsByFilter(catName, dbName, tblName, filter, maxParts);
+                                               String filter, short maxParts, String writeIdList) throws MetaException, NoSuchObjectException {
+    return objectStore.getPartitionsByFilter(catName, dbName, tblName, filter, maxParts, writeIdList);
   }
 
   @Override
   public List<Partition> getPartitionSpecsByFilterAndProjection(Table table,
-      GetPartitionsProjectionSpec projectionSpec, GetPartitionsFilterSpec filterSpec)
+      GetPartitionsProjectionSpec projectionSpec, GetPartitionsFilterSpec filterSpec, String writeIdList)
       throws MetaException, NoSuchObjectException {
-    return objectStore.getPartitionSpecsByFilterAndProjection(table, projectionSpec, filterSpec);
+    return objectStore.getPartitionSpecsByFilterAndProjection(table, projectionSpec, filterSpec, writeIdList);
   }
 
   @Override
   public int getNumPartitionsByFilter(String catName, String dbName, String tblName,
-                                      String filter) throws MetaException, NoSuchObjectException {
-    return objectStore.getNumPartitionsByFilter(catName, dbName, tblName, filter);
+                                      String filter, String writeIdList) throws MetaException, NoSuchObjectException {
+    return objectStore.getNumPartitionsByFilter(catName, dbName, tblName, filter, writeIdList);
   }
 
   @Override
   public int getNumPartitionsByExpr(String catName, String dbName, String tblName,
-                                    byte[] expr) throws MetaException, NoSuchObjectException {
-    return objectStore.getNumPartitionsByExpr(catName, dbName, tblName, expr);
+                                    byte[] expr, String writeIdList) throws MetaException, NoSuchObjectException {
+    return objectStore.getNumPartitionsByExpr(catName, dbName, tblName, expr, writeIdList);
   }
 
   @Override
   public List<Partition> getPartitionsByNames(String catName, String dbName, String tblName,
-      List<String> partNames)
+      List<String> partNames, String writeIdList)
           throws MetaException, NoSuchObjectException {
     return objectStore.getPartitionsByNames(
-        catName, dbName, tblName, partNames);
+        catName, dbName, tblName, partNames, writeIdList);
   }
 
   @Override
   public boolean getPartitionsByExpr(String catName, String dbName, String tblName, byte[] expr,
-                                     String defaultPartitionName, short maxParts, List<Partition> result) throws TException {
+                                     String defaultPartitionName, short maxParts, List<Partition> result,
+                                     String writeIdList) throws TException {
     return objectStore.getPartitionsByExpr(catName,
-        dbName, tblName, expr, defaultPartitionName, maxParts, result);
+        dbName, tblName, expr, defaultPartitionName, maxParts, result, writeIdList);
   }
 
   @Override
@@ -622,34 +612,36 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
 
   @Override
   public Partition getPartitionWithAuth(String catName, String dbName, String tblName,
-                                        List<String> partVals, String userName, List<String> groupNames)
+                                        List<String> partVals, String userName,
+                                        List<String> groupNames, String writeIdList)
       throws MetaException, NoSuchObjectException, InvalidObjectException {
     return objectStore.getPartitionWithAuth(catName, dbName, tblName, partVals, userName,
-        groupNames);
+        groupNames, writeIdList);
   }
 
   @Override
   public List<Partition> getPartitionsWithAuth(String catName, String dbName, String tblName,
-                                               short maxParts, String userName, List<String> groupNames)
+                                               short maxParts, String userName,
+                                               List<String> groupNames, String writeIdList)
       throws MetaException, NoSuchObjectException, InvalidObjectException {
     return objectStore.getPartitionsWithAuth(catName, dbName, tblName, maxParts, userName,
-        groupNames);
+        groupNames, writeIdList);
   }
 
   @Override
   public List<String> listPartitionNamesPs(String catName, String dbName, String tblName,
-                                           List<String> partVals, short maxParts)
+                                           List<String> partVals, short maxParts, String writeIdList)
       throws MetaException, NoSuchObjectException {
-    return objectStore.listPartitionNamesPs(catName, dbName, tblName, partVals, maxParts);
+    return objectStore.listPartitionNamesPs(catName, dbName, tblName, partVals, maxParts, writeIdList);
   }
 
   @Override
   public List<Partition> listPartitionsPsWithAuth(String catName, String dbName, String tblName,
                                                   List<String> partVals, short maxParts, String userName,
-                                                  List<String> groupNames)
+                                                  List<String> groupNames, String writeIdList)
       throws MetaException, InvalidObjectException, NoSuchObjectException {
     return objectStore.listPartitionsPsWithAuth(catName, dbName, tblName, partVals, maxParts,
-        userName, groupNames);
+        userName, groupNames, writeIdList);
   }
 
   @Override
@@ -718,12 +710,6 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
   public List<HiveObjectPrivilege> listTableColumnGrantsAll(String catName, String dbName, String tableName,
                                                             String columnName) {
     return objectStore.listTableColumnGrantsAll(catName, dbName, tableName, columnName);
-  }
-
-  @Override
-  public ColumnStatistics getTableColumnStatistics(String catName, String dbName, String tableName,
-                                                   List<String> colNames) throws MetaException, NoSuchObjectException {
-    return objectStore.getTableColumnStatistics(catName, dbName, tableName, colNames);
   }
 
   @Override
@@ -820,14 +806,6 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
   @Override
   public List<ColumnStatistics> getPartitionColumnStatistics(String catName, String dbName,
                                                              String tblName, List<String> colNames,
-                                                             List<String> partNames)
-      throws MetaException, NoSuchObjectException {
-    return objectStore.getPartitionColumnStatistics(catName, dbName, tblName  , colNames, partNames);
-  }
-
-  @Override
-  public List<ColumnStatistics> getPartitionColumnStatistics(String catName, String dbName,
-                                                             String tblName, List<String> colNames,
                                                              List<String> partNames,
                                                              String writeIdList)
       throws MetaException, NoSuchObjectException {
@@ -837,9 +815,9 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
 
   @Override
   public boolean doesPartitionExist(String catName, String dbName, String tableName,
-                                    List<FieldSchema> partKeys, List<String> partVals)
+                                    List<FieldSchema> partKeys, List<String> partVals, String writeIdList)
       throws MetaException, NoSuchObjectException {
-    return objectStore.doesPartitionExist(catName, dbName, tableName, partKeys, partVals);
+    return objectStore.doesPartitionExist(catName, dbName, tableName, partKeys, partVals, writeIdList);
   }
 
   @Override
@@ -903,13 +881,6 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
   public List<String> getFunctions(String catName, String dbName, String pattern)
       throws MetaException {
     return objectStore.getFunctions(catName, dbName, pattern);
-  }
-
-  @Override
-  public AggrStats get_aggr_stats_for(String catName, String dbName,
-                                      String tblName, List<String> partNames, List<String> colNames)
-      throws MetaException {
-    return null;
   }
 
   @Override
@@ -1324,5 +1295,4 @@ public class DummyRawStoreFailEvent implements RawStore, Configurable {
       NoSuchObjectException {
     return null;
   }
-
 }

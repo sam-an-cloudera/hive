@@ -203,17 +203,6 @@ public interface RawStore extends Configurable {
    * @param catalogName catalog the table is in.
    * @param dbName database the table is in.
    * @param tableName table name.
-   * @return table object, or null if no such table exists (wow it would be nice if we either
-   * consistently returned null or consistently threw NoSuchObjectException).
-   * @throws MetaException something went wrong in the RDBMS
-   */
-  Table getTable(String catalogName, String dbName, String tableName) throws MetaException;
-
-  /**
-   * Get a table object.
-   * @param catalogName catalog the table is in.
-   * @param dbName database the table is in.
-   * @param tableName table name.
    * @param writeIdList string format of valid writeId transaction list
    * @return table object, or null if no such table exists (wow it would be nice if we either
    * consistently returned null or consistently threw NoSuchObjectException).
@@ -268,18 +257,6 @@ public interface RawStore extends Configurable {
    * @param dbName database name.
    * @param tableName table name.
    * @param part_vals partition values for this table.
-   * @return the partition.
-   * @throws MetaException error reading from RDBMS.
-   * @throws NoSuchObjectException no partition matching this specification exists.
-   */
-  Partition getPartition(String catName, String dbName, String tableName,
-      List<String> part_vals) throws MetaException, NoSuchObjectException;
-  /**
-   * Get a partition.
-   * @param catName catalog name.
-   * @param dbName database name.
-   * @param tableName table name.
-   * @param part_vals partition values for this table.
    * @param writeIdList string format of valid writeId transaction list
    * @return the partition.
    * @throws MetaException error reading from RDBMS.
@@ -297,12 +274,13 @@ public interface RawStore extends Configurable {
    * @param tableName table name.
    * @param partKeys list of partition keys used to generate the partition name.
    * @param part_vals list of partition values.
+   * @param validWriteIdList valid writeId to read
    * @return true if the partition exists, false otherwise.
    * @throws MetaException failure reading RDBMS
    * @throws NoSuchObjectException this is never thrown.
    */
   boolean doesPartitionExist(String catName, String dbName, String tableName,
-      List<FieldSchema> partKeys, List<String> part_vals)
+      List<FieldSchema> partKeys, List<String> part_vals, String validWriteIdList)
       throws MetaException, NoSuchObjectException;
 
   /**
@@ -327,12 +305,13 @@ public interface RawStore extends Configurable {
    * @param dbName database name.
    * @param tableName table name
    * @param max maximum number of partitions, or -1 to get all partitions.
+   * @param validWriteIdList valid writeId to read
    * @return list of partitions
    * @throws MetaException error access the RDBMS.
    * @throws NoSuchObjectException no such table exists
    */
   List<Partition> getPartitions(String catName, String dbName,
-      String tableName, int max) throws MetaException, NoSuchObjectException;
+      String tableName, int max, String validWriteIdList) throws MetaException, NoSuchObjectException;
 
   /**
    * Get the location for every partition of a given table. If a partition location is a child of
@@ -343,11 +322,12 @@ public interface RawStore extends Configurable {
    * @param tblName table name.
    * @param baseLocationToNotShow Partition locations which are child of this path are omitted, and
    *     null value returned instead.
+   * @param validWriteIdList valid writeId to read
    * @param max The maximum number of partition locations returned, or -1 for all
    * @return The map of the partitionName, location pairs
    */
   Map<String, String> getPartitionLocations(String catName, String dbName, String tblName,
-      String baseLocationToNotShow, int max);
+      String baseLocationToNotShow, int max, String validWriteIdList);
 
   /**
    * Alter a table.
@@ -476,11 +456,12 @@ public interface RawStore extends Configurable {
    * @param db_name database name.
    * @param tbl_name table name.
    * @param max_parts maximum number of partitions to retrieve, -1 for all.
+   * @param validWriteIdList valid writeId to read
    * @return list of partition names.
    * @throws MetaException there was an error accessing the RDBMS
    */
   List<String> listPartitionNames(String catName, String db_name,
-      String tbl_name, short max_parts) throws MetaException;
+      String tbl_name, short max_parts, String validWriteIdList) throws MetaException;
 
   /**
    * Get a list of partition values as one big struct.
@@ -492,13 +473,14 @@ public interface RawStore extends Configurable {
    * @param filter filter to apply to the partition names
    * @param ascending whether to put in ascending order
    * @param order whether to order
+   * @param validWriteIdList valid writeId to read
    * @param maxParts maximum number of parts to return, or -1 for all
    * @return struct with all of the partition value information
    * @throws MetaException error access the RDBMS
    */
   PartitionValuesResponse listPartitionValues(String catName, String db_name, String tbl_name,
                                               List<FieldSchema> cols, boolean applyDistinct, String filter, boolean ascending,
-                                              List<FieldSchema> order, long maxParts) throws MetaException;
+                                              List<FieldSchema> order, long maxParts, String validWriteIdList) throws MetaException;
 
   /**
    * Alter a partition.
@@ -544,12 +526,13 @@ public interface RawStore extends Configurable {
    * @param tblName table name
    * @param filter SQL where clause filter
    * @param maxParts maximum number of partitions to return, or -1 for all.
+   * @param validWriteIdList valid writeId to read
    * @return list of partition objects matching the criteria
    * @throws MetaException Error accessing the RDBMS or processing the filter.
    * @throws NoSuchObjectException no such table.
    */
   List<Partition> getPartitionsByFilter(
-      String catName, String dbName, String tblName, String filter, short maxParts)
+      String catName, String dbName, String tblName, String filter, short maxParts, String validWriteIdList)
       throws MetaException, NoSuchObjectException;
 
   /**
@@ -576,12 +559,13 @@ public interface RawStore extends Configurable {
    *                       to filter by partition names, partition values or expression. The filter strings are provided
    *                       in the list of filters within the filterSpec. When more than one filters are provided in the list
    *                       they are logically AND together
+   * @param validWriteIdList valid writeId to read
    * @return List of matching partitions which which may be partially filled according to fieldList.
    * @throws MetaException         in case of errors
    * @throws NoSuchObjectException when table isn't found
    */
   List<Partition> getPartitionSpecsByFilterAndProjection(Table table,
-      GetPartitionsProjectionSpec projectionSpec, GetPartitionsFilterSpec filterSpec)
+      GetPartitionsProjectionSpec projectionSpec, GetPartitionsFilterSpec filterSpec, String validWriteIdList)
       throws MetaException, NoSuchObjectException;
   /**
    * Get partitions using an already parsed expression.
@@ -592,11 +576,12 @@ public interface RawStore extends Configurable {
    * @param defaultPartitionName default name of a partition
    * @param maxParts maximum number of partitions to return, or -1 for all
    * @param result list to place resulting partitions in
+   * @param validWriteIdList valid writeId to read
    * @return true if the result contains unknown partitions.
    * @throws TException error executing the expression
    */
   boolean getPartitionsByExpr(String catName, String dbName, String tblName,
-      byte[] expr, String defaultPartitionName, short maxParts, List<Partition> result)
+      byte[] expr, String defaultPartitionName, short maxParts, List<Partition> result, String validWriteIdList)
       throws TException;
 
   /**
@@ -605,11 +590,12 @@ public interface RawStore extends Configurable {
    * @param dbName database name.
    * @param tblName table name.
    * @param filter filter from Hive's SQL where clause
+   * @param validWriteIdList valid writeId to read
    * @return number of matching partitions.
    * @throws MetaException error accessing the RDBMS or executing the filter
    * @throws NoSuchObjectException no such table
    */
-  int getNumPartitionsByFilter(String catName, String dbName, String tblName, String filter)
+  int getNumPartitionsByFilter(String catName, String dbName, String tblName, String filter, String validWriteIdList)
     throws MetaException, NoSuchObjectException;
 
   /**
@@ -618,11 +604,12 @@ public interface RawStore extends Configurable {
    * @param dbName database name.
    * @param tblName table name.
    * @param expr an already parsed Hive expression
+   * @param validWriteIdList valid writeId to read
    * @return number of matching partitions.
    * @throws MetaException error accessing the RDBMS or working with the expression.
    * @throws NoSuchObjectException no such table.
    */
-  int getNumPartitionsByExpr(String catName, String dbName, String tblName, byte[] expr)
+  int getNumPartitionsByExpr(String catName, String dbName, String tblName, byte[] expr, String validWriteIdList)
       throws MetaException, NoSuchObjectException;
 
   /**
@@ -632,12 +619,13 @@ public interface RawStore extends Configurable {
    * @param tblName table name.
    * @param partNames list of partition names.  These are names not values, so they will include
    *                  both the key and the value.
+   * @param validWriteIdList valid writeId to read
    * @return list of matching partitions
    * @throws MetaException error accessing the RDBMS.
    * @throws NoSuchObjectException No such table.
    */
   List<Partition> getPartitionsByNames(String catName, String dbName, String tblName,
-                                       List<String> partNames)
+                                       List<String> partNames, String validWriteIdList)
       throws MetaException, NoSuchObjectException;
 
   Table markPartitionForEvent(String catName, String dbName, String tblName, Map<String,String> partVals, PartitionEventType evtType) throws MetaException, UnknownTableException, InvalidPartitionException, UnknownPartitionException;
@@ -824,13 +812,14 @@ public interface RawStore extends Configurable {
    * @param partVals partition values
    * @param user_name user to get privilege information for.
    * @param group_names groups to get privilege information for.
+   * @param validWriteIdList valid writeId to read
    * @return a partition
    * @throws MetaException error accessing the RDBMS.
    * @throws NoSuchObjectException no such partition exists
    * @throws InvalidObjectException error fetching privilege information
    */
   Partition getPartitionWithAuth(String catName, String dbName, String tblName,
-      List<String> partVals, String user_name, List<String> group_names)
+      List<String> partVals, String user_name, List<String> group_names, String validWriteIdList)
       throws MetaException, NoSuchObjectException, InvalidObjectException;
 
   /**
@@ -842,13 +831,14 @@ public interface RawStore extends Configurable {
    * @param maxParts maximum number of partitions to fetch, -1 for all partitions.
    * @param userName user to get privilege information for.
    * @param groupNames groups to get privilege information for.
+   * @param validWriteIdList valid writeId to read
    * @return list of partitions.
    * @throws MetaException error access the RDBMS.
    * @throws NoSuchObjectException no such table exists
    * @throws InvalidObjectException error fetching privilege information.
    */
   List<Partition> getPartitionsWithAuth(String catName, String dbName,
-      String tblName, short maxParts, String userName, List<String> groupNames)
+      String tblName, short maxParts, String userName, List<String> groupNames, String validWriteIdList)
       throws MetaException, NoSuchObjectException, InvalidObjectException;
 
   /**
@@ -863,12 +853,13 @@ public interface RawStore extends Configurable {
    *          Entries can be empty if you only want to specify latter partitions.
    * @param max_parts
    *          The maximum number of partitions to return
+   * @param validWriteIdList valid writeId to read
    * @return A list of partition names that match the partial spec.
    * @throws MetaException error accessing RDBMS
    * @throws NoSuchObjectException No such table exists
    */
   List<String> listPartitionNamesPs(String catName, String db_name, String tbl_name,
-      List<String> part_vals, short max_parts)
+      List<String> part_vals, short max_parts, String validWriteIdList)
       throws MetaException, NoSuchObjectException;
 
   /**
@@ -888,13 +879,14 @@ public interface RawStore extends Configurable {
    *          The user name for the partition for authentication privileges
    * @param groupNames
    *          The groupNames for the partition for authentication privileges
+   * @param validWriteIdList valid writeId to read
    * @return A list of partitions that match the partial spec.
    * @throws MetaException error access RDBMS
    * @throws NoSuchObjectException No such table exists
    * @throws InvalidObjectException error access privilege information
    */
   List<Partition> listPartitionsPsWithAuth(String catName, String db_name, String tbl_name,
-      List<String> part_vals, short max_parts, String userName, List<String> groupNames)
+      List<String> part_vals, short max_parts, String userName, List<String> groupNames, String validWriteIdList)
       throws MetaException, InvalidObjectException, NoSuchObjectException;
 
   /** Persists the given column statistics object to the metastore
@@ -928,21 +920,6 @@ public interface RawStore extends Configurable {
    * @param dbName name of the database, defaults to current database
    * @param tableName name of the table
    * @param colName names of the columns for which statistics is requested
-   * @return Relevant column statistics for the column for the given table
-   * @throws NoSuchObjectException No such table
-   * @throws MetaException error accessing the RDBMS
-   *
-   */
-  ColumnStatistics getTableColumnStatistics(String catName, String dbName, String tableName,
-    List<String> colName) throws MetaException, NoSuchObjectException;
-
-  /**
-   * Returns the relevant column statistics for a given column in a given table in a given database
-   * if such statistics exist.
-   * @param catName catalog name.
-   * @param dbName name of the database, defaults to current database
-   * @param tableName name of the table
-   * @param colName names of the columns for which statistics is requested
    * @param writeIdList string format of valid writeId transaction list
    * @return Relevant column statistics for the column for the given table
    * @throws NoSuchObjectException No such table
@@ -952,21 +929,6 @@ public interface RawStore extends Configurable {
   ColumnStatistics getTableColumnStatistics(
     String catName, String dbName, String tableName,
     List<String> colName, String writeIdList)
-      throws MetaException, NoSuchObjectException;
-
-  /**
-   * Get statistics for a partition for a set of columns.
-   * @param catName catalog name.
-   * @param dbName database name.
-   * @param tblName table name.
-   * @param partNames list of partition names.  These are names so must be key1=val1[/key2=val2...]
-   * @param colNames list of columns to get stats for
-   * @return list of statistics objects
-   * @throws MetaException error accessing the RDBMS
-   * @throws NoSuchObjectException no such partition.
-   */
-  List<ColumnStatistics> getPartitionColumnStatistics(
-     String catName, String dbName, String tblName, List<String> partNames, List<String> colNames)
       throws MetaException, NoSuchObjectException;
 
   /**
@@ -1214,21 +1176,6 @@ public interface RawStore extends Configurable {
    * @throws MetaException incorrectly specified function
    */
   List<String> getFunctions(String catName, String dbName, String pattern) throws MetaException;
-
-  /**
-   * Get aggregated stats for a table or partition(s).
-   * @param catName catalog name.
-   * @param dbName database name.
-   * @param tblName table name.
-   * @param partNames list of partition names.  These are the names of the partitions, not
-   *                  values.
-   * @param colNames list of column names
-   * @return aggregated stats
-   * @throws MetaException error accessing RDBMS
-   * @throws NoSuchObjectException no such table or partition
-   */
-  AggrStats get_aggr_stats_for(String catName, String dbName, String tblName,
-    List<String> partNames, List<String> colNames) throws MetaException, NoSuchObjectException;
 
   /**
    * Get aggregated stats for a table or partition(s).

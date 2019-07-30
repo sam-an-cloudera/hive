@@ -47,6 +47,9 @@ public class JSONUpdateTableColumnStatMessage extends UpdateTableColumnStatMessa
   @JsonProperty
   private String tableObjJson;
 
+  @JsonProperty
+  private String writeIds;
+
   /**
    * Default constructor, needed for Jackson.
    */
@@ -55,7 +58,7 @@ public class JSONUpdateTableColumnStatMessage extends UpdateTableColumnStatMessa
 
   public JSONUpdateTableColumnStatMessage(String server, String servicePrincipal, Long timestamp,
                       ColumnStatistics colStats, Table tableObj, Map<String, String> parameters,
-                                           long writeId) {
+                                           long writeId, String writeIds) {
     this.timestamp = timestamp;
     this.server = server;
     this.servicePrincipal = servicePrincipal;
@@ -68,6 +71,7 @@ public class JSONUpdateTableColumnStatMessage extends UpdateTableColumnStatMessa
       throw new IllegalArgumentException("Could not serialize JSONUpdateTableColumnStatMessage : ", e);
     }
     this.parameters = parameters;
+    this.writeIds = writeIds;
   }
 
   @Override
@@ -112,6 +116,11 @@ public class JSONUpdateTableColumnStatMessage extends UpdateTableColumnStatMessa
   @Override
   public Map<String, String> getParameters() {
     return parameters;
+  }
+
+  @Override
+  public String getWriteIds() {
+    return writeIds;
   }
 
   @Override

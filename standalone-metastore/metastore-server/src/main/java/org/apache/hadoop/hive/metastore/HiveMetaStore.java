@@ -586,19 +586,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         listeners.add(new HMSMetricsListener(conf));
       }
 
-      boolean canCachedStoreCanUseEvent = false;
-      for (MetaStoreEventListener listener : transactionalListeners) {
-        if (listener.doesAddEventsToNotificationLogTable()) {
-          canCachedStoreCanUseEvent = true;
-          break;
-        }
-      }
-      if (conf.getBoolean(ConfVars.METASTORE_CACHE_CAN_USE_EVENT.getVarname(), false) &&
-              !canCachedStoreCanUseEvent) {
-        throw new MetaException("CahcedStore can not use events for invalidation as there is no " +
-                " TransactionalMetaStoreEventListener to add events to notification table");
-      }
-
       endFunctionListeners = MetaStoreServerUtils.getMetaStoreListeners(
           MetaStoreEndFunctionListener.class, conf, MetastoreConf.getVar(conf, ConfVars.END_FUNCTION_LISTENERS));
 
@@ -2673,7 +2660,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         isReplicated = isDbReplicationTarget(db);
 
         // drop any partitions
-        tbl = get_table_core(catName, dbname, name);
+        tbl = get_table_core(catName, dbname, name, null);
         if (tbl == null) {
           throw new NoSuchObjectException(name + " doesn't exist");
         }
@@ -2822,7 +2809,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       List<Path> partPaths = new ArrayList<>();
       while (true) {
         Map<String, String> partitionLocations = ms.getPartitionLocations(catName, dbName, tableName,
-            tableDnsPath, batchSize);
+            tableDnsPath, batchSize, null);
         if (partitionLocations == null || partitionLocations.isEmpty()) {
           // No more partitions left to drop. Return with the collected path list to delete.
           return partPaths;
@@ -2942,7 +2929,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         String validWriteIds, long writeId) throws Exception {
       if (partNames == null) {
         if (0 != table.getPartitionKeysSize()) {
-          for (Partition partition : ms.getPartitions(catName, dbName, tableName, Integer.MAX_VALUE)) {
+          for (Partition partition : ms.getPartitions(catName, dbName, tableName, Integer.MAX_VALUE, null)) {
             alterPartitionForTruncate(ms, catName, dbName, tableName, table, partition,
                 validWriteIds, writeId);
           }
@@ -2973,7 +2960,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
               environmentContext, this, validWriteIds);
         }
       } else {
-        for (Partition partition : ms.getPartitionsByNames(catName, dbName, tableName, partNames)) {
+        for (Partition partition : ms.getPartitionsByNames(catName, dbName, tableName, partNames, null)) {
           alterPartitionForTruncate(ms, catName, dbName, tableName, table, partition,
               validWriteIds, writeId);
         }
@@ -2990,14 +2977,14 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       List<Path> locations = new ArrayList<>();
       if (partNames == null) {
         if (0 != table.getPartitionKeysSize()) {
-          for (Partition partition : ms.getPartitions(catName, dbName, tableName, Integer.MAX_VALUE)) {
+          for (Partition partition : ms.getPartitions(catName, dbName, tableName, Integer.MAX_VALUE, null)) {
             locations.add(new Path(partition.getSd().getLocation()));
           }
         } else {
           locations.add(new Path(table.getSd().getLocation()));
         }
       } else {
-        for (Partition partition : ms.getPartitionsByNames(catName, dbName, tableName, partNames)) {
+        for (Partition partition : ms.getPartitionsByNames(catName, dbName, tableName, partNames, null)) {
           locations.add(new Path(partition.getSd().getLocation()));
         }
       }
@@ -3029,7 +3016,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         String validWriteIds, long writeId) throws MetaException, NoSuchObjectException {
       try {
         String[] parsedDbName = parseDbName(dbName, conf);
-        Table tbl = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName);
+        Table tbl = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName, null);
         boolean isAutopurge = (tbl.isSetParameters() && "true".equalsIgnoreCase(tbl.getParameters().get("auto.purge")));
         Database db = get_database_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME]);
 
@@ -3085,7 +3072,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     @Deprecated
-    public Table get_table(final String dbname, final String name) throws MetaException,
+    public Table get_table(final String dbname, final String name, String validWriteIdList) throws MetaException,
         NoSuchObjectException {
       String[] parsedDbName = parseDbName(dbname, conf);
       return getTableInternal(
@@ -3237,15 +3224,6 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         endFunction("get_table_metas", t != null, ex);
       }
       return t;
-    }
-
-    @Override
-    public Table get_table_core(
-        final String catName,
-        final String dbname,
-        final String name)
-        throws MetaException, NoSuchObjectException {
-      return get_table_core(catName, dbname, name, null);
     }
 
     @Override
@@ -3484,7 +3462,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         Partition old_part;
         try {
           old_part = ms.getPartition(part.getCatName(), part.getDbName(), part
-              .getTableName(), part.getValues());
+              .getTableName(), part.getValues(), null);
         } catch (NoSuchObjectException e) {
           // this means there is no existing partition
           old_part = null;
@@ -4103,7 +4081,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       MetaStoreServerUtils.validatePartitionNameCharacters(part.getValues(),
           partitionValidationPattern);
       boolean doesExist = ms.doesPartitionExist(part.getCatName(),
-          part.getDbName(), part.getTableName(), partitionKeys, part.getValues());
+          part.getDbName(), part.getTableName(), partitionKeys, part.getValues(), null);
       if (doesExist && !ifNotExists) {
         throw new AlreadyExistsException("Partition already exists: " + part);
       }
@@ -4356,6 +4334,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       boolean success = false;
       boolean pathCreated = false;
       RawStore ms = getMS();
+
       ms.openTransaction();
 
       Table destinationTable =
@@ -4390,7 +4369,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       }
       // Passed the unparsed DB name here, as get_partitions_ps expects to parse it
       List<Partition> partitionsToExchange = get_partitions_ps(sourceDbName, sourceTableName,
-          partVals, (short)-1);
+          partVals, (short)-1, null);
       if (partitionsToExchange == null || partitionsToExchange.isEmpty()) {
         throw new MetaException("No partition is found with the values " + partitionSpecs
             + " for the table " + sourceTableName);
@@ -4415,7 +4394,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
       // Check if any of the partitions already exists in destTable.
       List<String> destPartitionNames = ms.listPartitionNames(parsedDestDbName[CAT_NAME],
-          parsedDestDbName[DB_NAME], destTableName, (short) -1);
+          parsedDestDbName[DB_NAME], destTableName, (short) -1, null);
       if (destPartitionNames != null && !destPartitionNames.isEmpty()) {
         for (Partition partition : partitionsToExchange) {
           String partToExchangeName =
@@ -4544,7 +4523,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
       try {
         ms.openTransaction();
-        part = ms.getPartition(catName, db_name, tbl_name, part_vals);
+        part = ms.getPartition(catName, db_name, tbl_name, part_vals, null);
         tbl = get_table_core(catName, db_name, tbl_name, null);
         tableDataShouldBeDeleted = checkTableDataShouldBeDeleted(tbl, deleteData);
         firePreEvent(new PreDropPartitionEvent(tbl, part, deleteData, this));
@@ -4671,6 +4650,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           ? request.getEnvironmentContext() : null;
 
       boolean success = false;
+
       ms.openTransaction();
       Table tbl = null;
       List<Partition> parts = null;
@@ -4681,7 +4661,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       try {
         // We need Partition-s for firing events and for result; DN needs MPartition-s to drop.
         // Great... Maybe we could bypass fetching MPartitions by issuing direct SQL deletes.
-        tbl = get_table_core(catName, dbName, tblName);
+        tbl = get_table_core(catName, dbName, tblName, null);
         isExternal(tbl);
         mustPurge = isMustPurge(envContext, tbl);
         int minCount = 0;
@@ -4694,7 +4674,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             ++minCount; // At least one partition per expression, if not ifExists
             List<Partition> result = new ArrayList<>();
             boolean hasUnknown = ms.getPartitionsByExpr(
-                catName, dbName, tblName, expr.getExpr(), null, (short)-1, result);
+                catName, dbName, tblName, expr.getExpr(), null, (short)-1, result, null);
             if (hasUnknown) {
               // Expr is built by DDLSA, it should only contain part cols and simple ops
               throw new MetaException("Unexpected unknown partitions to drop");
@@ -4715,7 +4695,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         } else if (spec.isSetNames()) {
           partNames = spec.getNames();
           minCount = partNames.size();
-          parts = ms.getPartitionsByNames(catName, dbName, tblName, partNames);
+          parts = ms.getPartitionsByNames(catName, dbName, tblName, partNames, null);
         } else {
           throw new MetaException("Partition spec is not set");
         }
@@ -4768,6 +4748,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
 
         success = ms.commitTransaction();
+
         DropPartitionsResult result = new DropPartitionsResult();
         if (needResult) {
           result.setPartitions(parts);
@@ -4859,7 +4840,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public Partition get_partition(final String db_name, final String tbl_name,
-        final List<String> part_vals) throws MetaException, NoSuchObjectException {
+        final List<String> part_vals, String validWriteIdList) throws MetaException, NoSuchObjectException {
       String[] parsedDbName = parseDbName(db_name, conf);
       startPartitionFunction("get_partition", parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
           tbl_name, part_vals);
@@ -4868,8 +4849,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       Exception ex = null;
       try {
         authorizeTableForPartitionMetadata(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
-        fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
-        ret = getMS().getPartition(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, part_vals);
+        fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, validWriteIdList);
+        ret = getMS().getPartition(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, part_vals, validWriteIdList);
         ret = FilterUtils.filterPartitionIfEnabled(isServerFilterEnabled, filterHook, ret);
       } catch (Exception e) {
         ex = e;
@@ -4884,12 +4865,12 @@ public class HiveMetaStore extends ThriftHiveMetastore {
      * Fire a pre-event for read table operation, if there are any
      * pre-event listeners registered
      */
-    private void fireReadTablePreEvent(String catName, String dbName, String tblName)
+    private void fireReadTablePreEvent(String catName, String dbName, String tblName, String validWriteIdList)
         throws MetaException, NoSuchObjectException {
       if(preListeners.size() > 0) {
         // do this only if there is a pre event listener registered (avoid unnecessary
         // metastore api call)
-        Table t = getMS().getTable(catName, dbName, tblName);
+        Table t = getMS().getTable(catName, dbName, tblName, validWriteIdList);
         if (t == null) {
           throw new NoSuchObjectException(TableName.getQualified(catName, dbName, tblName)
               + " table not found");
@@ -4901,19 +4882,19 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public Partition get_partition_with_auth(final String db_name,
         final String tbl_name, final List<String> part_vals,
-        final String user_name, final List<String> group_names)
+        final String user_name, final List<String> group_names, String validWriteIdList)
         throws TException {
       String[] parsedDbName = parseDbName(db_name, conf);
       startPartitionFunction("get_partition_with_auth", parsedDbName[CAT_NAME],
           parsedDbName[DB_NAME], tbl_name, part_vals);
-      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
+      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, validWriteIdList);
       Partition ret = null;
       Exception ex = null;
       try {
         authorizeTableForPartitionMetadata(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
 
         ret = getMS().getPartitionWithAuth(parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
-            tbl_name, part_vals, user_name, group_names);
+            tbl_name, part_vals, user_name, group_names, validWriteIdList);
         ret = FilterUtils.filterPartitionIfEnabled(isServerFilterEnabled, filterHook, ret);
       } catch (InvalidObjectException e) {
         ex = e;
@@ -4929,20 +4910,20 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public List<Partition> get_partitions(final String db_name, final String tbl_name,
-        final short max_parts) throws NoSuchObjectException, MetaException {
+        final short max_parts, String validWriteIdList) throws NoSuchObjectException, MetaException {
       String[] parsedDbName = parseDbName(db_name, conf);
       startTableFunction("get_partitions", parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
-      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
+      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, validWriteIdList);
       List<Partition> ret = null;
       Exception ex = null;
       try {
         checkLimitNumberOfPartitionsByFilter(parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
-            tbl_name, NO_FILTER_STRING, max_parts);
+            tbl_name, NO_FILTER_STRING, max_parts, validWriteIdList);
 
         authorizeTableForPartitionMetadata(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
 
         ret = getMS().getPartitions(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name,
-            max_parts);
+            max_parts, validWriteIdList);
         ret = FilterUtils.filterPartitionsIfEnabled(isServerFilterEnabled, filterHook, ret);
       } catch (Exception e) {
         ex = e;
@@ -4957,7 +4938,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public List<Partition> get_partitions_with_auth(final String dbName,
         final String tblName, final short maxParts, final String userName,
-        final List<String> groupNames) throws TException {
+        final List<String> groupNames, String validWriteIdList) throws TException {
       String[] parsedDbName = parseDbName(dbName, conf);
       startTableFunction("get_partitions_with_auth", parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tblName);
 
@@ -4965,12 +4946,12 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       Exception ex = null;
       try {
         checkLimitNumberOfPartitionsByFilter(parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
-            tblName, NO_FILTER_STRING, maxParts);
+            tblName, NO_FILTER_STRING, maxParts, validWriteIdList);
 
         authorizeTableForPartitionMetadata(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tblName);
 
         ret = getMS().getPartitionsWithAuth(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tblName,
-            maxParts, userName, groupNames);
+            maxParts, userName, groupNames, validWriteIdList);
         ret = FilterUtils.filterPartitionsIfEnabled(isServerFilterEnabled, filterHook, ret);
       } catch (InvalidObjectException e) {
         ex = e;
@@ -4987,19 +4968,19 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     private void checkLimitNumberOfPartitionsByFilter(String catName, String dbName,
                                                       String tblName, String filterString,
-                                                      int maxParts) throws TException {
+                                                      int maxParts, String validWriteIdList) throws TException {
       if (isPartitionLimitEnabled()) {
         checkLimitNumberOfPartitions(tblName, get_num_partitions_by_filter(prependCatalogToDbName(
-            catName, dbName, conf), tblName, filterString), maxParts);
+            catName, dbName, conf), tblName, filterString, validWriteIdList), maxParts);
       }
     }
 
     private void checkLimitNumberOfPartitionsByExpr(String catName, String dbName, String tblName,
-                                                    byte[] filterExpr, int maxParts)
+                                                    byte[] filterExpr, int maxParts, String validWriteIdList)
         throws TException {
       if (isPartitionLimitEnabled()) {
         checkLimitNumberOfPartitions(tblName, get_num_partitions_by_expr(catName, dbName, tblName,
-            filterExpr), maxParts);
+            filterExpr, validWriteIdList), maxParts);
       }
     }
 
@@ -5021,7 +5002,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     }
 
     @Override
-    public List<PartitionSpec> get_partitions_pspec(final String db_name, final String tbl_name, final int max_parts)
+    public List<PartitionSpec> get_partitions_pspec(final String db_name, final String tbl_name, final int max_parts, String validWriteIdList)
       throws NoSuchObjectException, MetaException  {
 
       String[] parsedDbName = parseDbName(db_name, conf);
@@ -5031,9 +5012,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
       List<PartitionSpec> partitionSpecs = null;
       try {
-        Table table = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName);
+        Table table = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName, validWriteIdList);
         // get_partitions will parse out the catalog and db names itself
-        List<Partition> partitions = get_partitions(db_name, tableName, (short) max_parts);
+        List<Partition> partitions = get_partitions(db_name, tableName, (short) max_parts, validWriteIdList);
 
         if (is_partition_spec_grouping_enabled(table)) {
           partitionSpecs = MetaStoreServerUtils
@@ -5074,10 +5055,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       GetPartitionsResponse response = null;
       Exception ex = null;
       try {
-        Table table = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName);
+        Table table = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName, request.getValidWriteIdList());
         List<Partition> partitions = getMS()
             .getPartitionSpecsByFilterAndProjection(table, request.getProjectionSpec(),
-                request.getFilterSpec());
+                request.getFilterSpec(), request.getValidWriteIdList());
         List<String> processorCapabilities = request.getProcessorCapabilities();
         String processorId = request.getProcessorIdentifier();
         if (processorCapabilities == null || processorCapabilities.size() == 0 ||
@@ -5110,16 +5091,16 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public List<String> get_partition_names(final String db_name, final String tbl_name,
-        final short max_parts) throws NoSuchObjectException, MetaException {
+        final short max_parts, String validWriteIdList) throws NoSuchObjectException, MetaException {
       String[] parsedDbName = parseDbName(db_name, conf);
       startTableFunction("get_partition_names", parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
-      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
+      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, validWriteIdList);
       List<String> ret = null;
       Exception ex = null;
       try {
         authorizeTableForPartitionMetadata(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
         ret = getMS().listPartitionNames(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name,
-            max_parts);
+            max_parts, validWriteIdList);
         ret = FilterUtils.filterPartitionNamesIfEnabled(isServerFilterEnabled,
             filterHook, parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, ret);
       } catch (MetaException e) {
@@ -5150,7 +5131,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         partCols.add(request.getPartitionKeys().get(0));
         return getMS().listPartitionValues(catName, dbName, tblName, request.getPartitionKeys(),
             request.isApplyDistinct(), request.getFilter(), request.isAscending(),
-            request.getPartitionOrder(), request.getMaxParts());
+            request.getPartitionOrder(), request.getMaxParts(), request.getValidWriteIdList());
       } catch (NoSuchObjectException e) {
         LOG.error(String.format("Unable to get partition for %s.%s.%s", catName, dbName, tblName), e);
         throw new MetaException(e.getMessage());
@@ -5449,7 +5430,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       boolean success = false;
       Exception ex = null;
       try {
-        Table oldt = get_table_core(catName, dbname, name);
+        Table oldt = get_table_core(catName, dbname, name, null);
         firePreEvent(new PreAlterTableEvent(oldt, newTable, this));
         alterHandler.alterTable(getMS(), wh, catName, dbname, name, newTable,
                 envContext, this, validWriteIdList);
@@ -5605,14 +5586,14 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     }
 
     @Override
-    public List<FieldSchema> get_fields(String db, String tableName)
+    public List<FieldSchema> get_fields(String db, String tableName, String validWriteIdList)
         throws MetaException, UnknownTableException, UnknownDBException {
-      return get_fields_with_environment_context(db, tableName, null);
+      return get_fields_with_environment_context(db, tableName, null, validWriteIdList);
     }
 
     @Override
     public List<FieldSchema> get_fields_with_environment_context(String db, String tableName,
-        final EnvironmentContext envContext)
+        final EnvironmentContext envContext, String validWriteIdList)
         throws MetaException, UnknownTableException, UnknownDBException {
       startFunction("get_fields_with_environment_context", ": db=" + db + "tbl=" + tableName);
       String[] names = tableName.split("\\.");
@@ -5625,7 +5606,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       ClassLoader orgHiveLoader = null;
       try {
         try {
-          tbl = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], base_table_name);
+          tbl = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], base_table_name, validWriteIdList);
           firePreEvent(new PreReadTableEvent(tbl, this));
         } catch (NoSuchObjectException e) {
           throw new UnknownTableException(e.getMessage());
@@ -5685,9 +5666,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
      * @throws UnknownDBException
      */
     @Override
-    public List<FieldSchema> get_schema(String db, String tableName)
+    public List<FieldSchema> get_schema(String db, String tableName, String validWriteIdList)
         throws MetaException, UnknownTableException, UnknownDBException {
-      return get_schema_with_environment_context(db,tableName, null);
+      return get_schema_with_environment_context(db,tableName, null, validWriteIdList);
     }
 
 
@@ -5708,7 +5689,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
      */
     @Override
     public List<FieldSchema> get_schema_with_environment_context(String db, String tableName,
-          final EnvironmentContext envContext)
+          final EnvironmentContext envContext, String validWriteIdList)
         throws MetaException, UnknownTableException, UnknownDBException {
       startFunction("get_schema_with_environment_context", ": db=" + db + "tbl=" + tableName);
       boolean success = false;
@@ -5720,12 +5701,12 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
         Table tbl;
         try {
-          tbl = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], base_table_name);
+          tbl = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], base_table_name, validWriteIdList);
         } catch (NoSuchObjectException e) {
           throw new UnknownTableException(e.getMessage());
         }
         // Pass unparsed db name here
-        List<FieldSchema> fieldSchemas = get_fields_with_environment_context(db, base_table_name,envContext);
+        List<FieldSchema> fieldSchemas = get_fields_with_environment_context(db, base_table_name,envContext, validWriteIdList);
 
         if (tbl == null || fieldSchemas == null) {
           throw new UnknownTableException(tableName + " doesn't exist");
@@ -5836,15 +5817,15 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     private Partition get_partition_by_name_core(final RawStore ms, final String catName,
                                                  final String db_name, final String tbl_name,
-                                                 final String part_name) throws TException {
-      fireReadTablePreEvent(catName, db_name, tbl_name);
+                                                 final String part_name, String validWriteIdList) throws TException {
+      fireReadTablePreEvent(catName, db_name, tbl_name, validWriteIdList);
       List<String> partVals;
       try {
         partVals = getPartValsFromName(ms, catName, db_name, tbl_name, part_name);
       } catch (InvalidObjectException e) {
         throw new NoSuchObjectException(e.getMessage());
       }
-      Partition p = ms.getPartition(catName, db_name, tbl_name, partVals);
+      Partition p = ms.getPartition(catName, db_name, tbl_name, partVals, validWriteIdList);
       p = FilterUtils.filterPartitionIfEnabled(isServerFilterEnabled, filterHook, p);
 
       if (p == null) {
@@ -5856,7 +5837,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public Partition get_partition_by_name(final String db_name, final String tbl_name,
-        final String part_name) throws TException {
+        final String part_name, String validWriteIdList) throws TException {
 
       String[] parsedDbName = parseDbName(db_name, conf);
       startFunction("get_partition_by_name", ": tbl=" +
@@ -5866,7 +5847,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       Exception ex = null;
       try {
         ret = get_partition_by_name_core(getMS(), parsedDbName[CAT_NAME],
-            parsedDbName[DB_NAME], tbl_name, part_name);
+            parsedDbName[DB_NAME], tbl_name, part_name, validWriteIdList);
         ret = FilterUtils.filterPartitionIfEnabled(isServerFilterEnabled, filterHook, ret);
       } catch (Exception e) {
         ex = e;
@@ -5963,7 +5944,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Override
     public List<Partition> get_partitions_ps(final String db_name,
         final String tbl_name, final List<String> part_vals,
-        final short max_parts) throws TException {
+        final short max_parts, String validWriteIdList) throws TException {
       String[] parsedDbName = parseDbName(db_name, conf);
       startPartitionFunction("get_partitions_ps", parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
           tbl_name, part_vals);
@@ -5974,7 +5955,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         authorizeTableForPartitionMetadata(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
         // Don't send the parsedDbName, as this method will parse itself.
         ret = get_partitions_ps_with_auth(db_name, tbl_name, part_vals,
-            max_parts, null, null);
+            max_parts, null, null, validWriteIdList);
         ret = FilterUtils.filterPartitionsIfEnabled(isServerFilterEnabled, filterHook, ret);
       } catch (Exception e) {
         ex = e;
@@ -5990,17 +5971,17 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     public List<Partition> get_partitions_ps_with_auth(final String db_name,
         final String tbl_name, final List<String> part_vals,
         final short max_parts, final String userName,
-        final List<String> groupNames) throws TException {
+        final List<String> groupNames, String validWriteIdList) throws TException {
       String[] parsedDbName = parseDbName(db_name, conf);
       startPartitionFunction("get_partitions_ps_with_auth", parsedDbName[CAT_NAME],
           parsedDbName[DB_NAME], tbl_name, part_vals);
-      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
+      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, validWriteIdList);
       List<Partition> ret = null;
       Exception ex = null;
       try {
         authorizeTableForPartitionMetadata(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
         ret = getMS().listPartitionsPsWithAuth(parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
-            tbl_name, part_vals, max_parts, userName, groupNames);
+            tbl_name, part_vals, max_parts, userName, groupNames, validWriteIdList);
         ret = FilterUtils.filterPartitionsIfEnabled(isServerFilterEnabled, filterHook, ret);
       } catch (InvalidObjectException e) {
         ex = e;
@@ -6016,18 +5997,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public List<String> get_partition_names_ps(final String db_name,
-        final String tbl_name, final List<String> part_vals, final short max_parts)
+        final String tbl_name, final List<String> part_vals, final short max_parts, String validWriteIdList)
         throws TException {
       String[] parsedDbName = parseDbName(db_name, conf);
       startPartitionFunction("get_partitions_names_ps", parsedDbName[CAT_NAME],
           parsedDbName[DB_NAME], tbl_name, part_vals);
-      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
+      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, validWriteIdList);
       List<String> ret = null;
       Exception ex = null;
       try {
         authorizeTableForPartitionMetadata(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name);
         ret = getMS().listPartitionNamesPs(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name,
-            part_vals, max_parts);
+            part_vals, max_parts, validWriteIdList);
         ret = FilterUtils.filterPartitionNamesIfEnabled(isServerFilterEnabled,
             filterHook, parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tbl_name, ret);
       } catch (Exception e) {
@@ -6081,7 +6062,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Deprecated
     @Override
     public ColumnStatistics get_table_column_statistics(String dbName, String tableName,
-      String colName) throws TException {
+      String colName, String validWriteIdList) throws TException {
       String[] parsedDbName = parseDbName(dbName, conf);
       parsedDbName[CAT_NAME] = parsedDbName[CAT_NAME].toLowerCase();
       parsedDbName[DB_NAME] = parsedDbName[DB_NAME].toLowerCase();
@@ -6138,7 +6119,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     @Deprecated
     @Override
     public ColumnStatistics get_partition_column_statistics(String dbName, String tableName,
-      String partName, String colName) throws TException {
+      String partName, String colName, String validWriteIdList) throws TException {
       // Note: this method appears to be unused within Hive.
       //       It doesn't take txn stats into account.
       dbName = dbName.toLowerCase();
@@ -6154,7 +6135,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       try {
         List<ColumnStatistics> list = getMS().getPartitionColumnStatistics(
             parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName,
-            Lists.newArrayList(convertedPartName), Lists.newArrayList(colName));
+            Lists.newArrayList(convertedPartName), Lists.newArrayList(colName), validWriteIdList);
         if (list.isEmpty()) {
           return null;
         }
@@ -6242,6 +6223,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           colStats.getStatsDesc().getTableName()));
 
       Map<String, String> parameters = null;
+
       getMS().openTransaction();
       boolean committed = false;
       try {
@@ -6254,13 +6236,13 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             MetaStoreListenerNotifier.notifyEvent(transactionalListeners,
                     EventType.UPDATE_TABLE_COLUMN_STAT,
                     new UpdateTableColumnStatEvent(colStats, tableObj, parameters,
-                            writeId, this));
+                            writeId, validWriteIds, this));
           }
           if (!listeners.isEmpty()) {
             MetaStoreListenerNotifier.notifyEvent(listeners,
                     EventType.UPDATE_TABLE_COLUMN_STAT,
                     new UpdateTableColumnStatEvent(colStats, tableObj, parameters,
-                            writeId,this));
+                            writeId, validWriteIds, this));
           }
         }
         committed = getMS().commitTransaction();
@@ -6308,6 +6290,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       Map<String, String> parameters;
       List<String> partVals;
       boolean committed = false;
+
       getMS().openTransaction();
       try {
         if (tbl == null) {
@@ -6320,13 +6303,13 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             MetaStoreListenerNotifier.notifyEvent(transactionalListeners,
               EventType.UPDATE_PARTITION_COLUMN_STAT,
               new UpdatePartitionColumnStatEvent(colStats, partVals, parameters, tbl,
-                      writeId, this));
+                      writeId, validWriteIds, this));
           }
           if (!listeners.isEmpty()) {
             MetaStoreListenerNotifier.notifyEvent(listeners,
               EventType.UPDATE_PARTITION_COLUMN_STAT,
               new UpdatePartitionColumnStatEvent(colStats, partVals, parameters, tbl,
-                      writeId, this));
+                      writeId, validWriteIds, this));
           }
         }
         committed = getMS().commitTransaction();
@@ -6382,7 +6365,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       getMS().openTransaction();
       try {
         List<String> partVals = getPartValsFromName(getMS(), parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName, convertedPartName);
-        Table table = getMS().getTable(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName);
+        Table table = getMS().getTable(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName, null);
         // This API looks unused; if it were used we'd need to update stats state and write ID.
         // We cannot just randomly nuke some txn stats.
         if (TxnUtils.isTransactionalTable(table)) {
@@ -6432,9 +6415,10 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
 
       boolean ret = false, committed = false;
+
       getMS().openTransaction();
       try {
-        Table table = getMS().getTable(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName);
+        Table table = getMS().getTable(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tableName, null);
         // This API looks unused; if it were used we'd need to update stats state and write ID.
         // We cannot just randomly nuke some txn stats.
         if (TxnUtils.isTransactionalTable(table)) {
@@ -6468,22 +6452,22 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public List<Partition> get_partitions_by_filter(final String dbName, final String tblName,
-                                                    final String filter, final short maxParts)
+                                                    final String filter, final short maxParts, String validWriteIdList)
         throws TException {
       String[] parsedDbName = parseDbName(dbName, conf);
       startTableFunction("get_partitions_by_filter", parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
           tblName);
-      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tblName);
+      fireReadTablePreEvent(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tblName, validWriteIdList);
       List<Partition> ret = null;
       Exception ex = null;
       try {
         checkLimitNumberOfPartitionsByFilter(parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
-            tblName, filter, maxParts);
+            tblName, filter, maxParts, validWriteIdList);
 
         authorizeTableForPartitionMetadata(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tblName);
 
         ret = getMS().getPartitionsByFilter(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tblName,
-            filter, maxParts);
+            filter, maxParts, validWriteIdList);
         ret = FilterUtils.filterPartitionsIfEnabled(isServerFilterEnabled, filterHook, ret);
       } catch (Exception e) {
         ex = e;
@@ -6496,7 +6480,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public List<PartitionSpec> get_part_specs_by_filter(final String dbName, final String tblName,
-                                                        final String filter, final int maxParts)
+                                                        final String filter, final int maxParts, String validWriteIdList)
         throws TException {
 
       String[] parsedDbName = parseDbName(dbName, conf);
@@ -6504,9 +6488,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
       List<PartitionSpec> partitionSpecs = null;
       try {
-        Table table = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tblName);
+        Table table = get_table_core(parsedDbName[CAT_NAME], parsedDbName[DB_NAME], tblName, validWriteIdList);
         // Don't pass the parsed db name, as get_partitions_by_filter will parse it itself
-        List<Partition> partitions = get_partitions_by_filter(dbName, tblName, filter, (short) maxParts);
+        List<Partition> partitions = get_partitions_by_filter(dbName, tblName, filter, (short) maxParts, validWriteIdList);
 
         if (is_partition_spec_grouping_enabled(table)) {
           partitionSpecs = MetaStoreServerUtils
@@ -6535,14 +6519,14 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       String dbName = req.getDbName(), tblName = req.getTblName();
       String catName = req.isSetCatName() ? req.getCatName() : getDefaultCatalog(conf);
       startTableFunction("get_partitions_by_expr", catName, dbName, tblName);
-      fireReadTablePreEvent(catName, dbName, tblName);
+      fireReadTablePreEvent(catName, dbName, tblName, req.getValidWriteIdList());
       PartitionsByExprResult ret = null;
       Exception ex = null;
       try {
-        checkLimitNumberOfPartitionsByExpr(catName, dbName, tblName, req.getExpr(), UNLIMITED_MAX_PARTITIONS);
+        checkLimitNumberOfPartitionsByExpr(catName, dbName, tblName, req.getExpr(), UNLIMITED_MAX_PARTITIONS, req.getValidWriteIdList());
         List<Partition> partitions = new LinkedList<>();
         boolean hasUnknownPartitions = getMS().getPartitionsByExpr(catName, dbName, tblName,
-            req.getExpr(), req.getDefaultPartitionName(), req.getMaxParts(), partitions);
+            req.getExpr(), req.getDefaultPartitionName(), req.getMaxParts(), partitions, req.getValidWriteIdList());
         ret = new PartitionsByExprResult(partitions, hasUnknownPartitions);
       } catch (Exception e) {
         ex = e;
@@ -6568,7 +6552,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public int get_num_partitions_by_filter(final String dbName,
-                                            final String tblName, final String filter)
+                                            final String tblName, final String filter, String validWriteIdList)
             throws TException {
       String[] parsedDbName = parseDbName(dbName, conf);
       if (parsedDbName[DB_NAME] == null || tblName == null) {
@@ -6581,7 +6565,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       Exception ex = null;
       try {
         ret = getMS().getNumPartitionsByFilter(parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
-            tblName, filter);
+            tblName, filter, validWriteIdList);
       } catch (Exception e) {
         ex = e;
         rethrowException(e);
@@ -6592,12 +6576,12 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     }
 
     private int get_num_partitions_by_expr(final String catName, final String dbName,
-                                           final String tblName, final byte[] expr)
+                                           final String tblName, final byte[] expr, String validWriteIdList)
         throws TException {
       int ret = -1;
       Exception ex = null;
       try {
-        ret = getMS().getNumPartitionsByExpr(catName, dbName, tblName, expr);
+        ret = getMS().getNumPartitionsByExpr(catName, dbName, tblName, expr, validWriteIdList);
       } catch (Exception e) {
         ex = e;
         rethrowException(e);
@@ -6609,8 +6593,8 @@ public class HiveMetaStore extends ThriftHiveMetastore {
 
     @Override
     public List<Partition> get_partitions_by_names(final String dbName, final String tblName,
-                                                   final List<String> partNames) throws TException {
-      return get_partitions_by_names(dbName, tblName, partNames, false);
+                                                   final List<String> partNames, String validWriteIdList) throws TException {
+      return get_partitions_by_names(dbName, tblName, partNames, false, validWriteIdList);
     }
 
     @Override
@@ -6619,18 +6603,18 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       List<Partition> partitions = get_partitions_by_names(gpbnr.getDb_name(),
               gpbnr.getTbl_name(), gpbnr.getNames(),
               gpbnr.isSetGet_col_stats() && gpbnr.isGet_col_stats(), gpbnr.getProcessorCapabilities(),
-              gpbnr.getProcessorIdentifier());
+              gpbnr.getProcessorIdentifier(), gpbnr.getValidWriteIdList());
       return new GetPartitionsByNamesResult(partitions);
     }
 
     public List<Partition> get_partitions_by_names(final String dbName, final String tblName,
-           final List<String> partNames, boolean getColStats) throws TException {
-      return get_partitions_by_names(dbName, tblName, partNames, getColStats, null, null);
+           final List<String> partNames, boolean getColStats, String validWriteIdList) throws TException {
+      return get_partitions_by_names(dbName, tblName, partNames, getColStats, null, null, validWriteIdList);
     }
  
     public List<Partition> get_partitions_by_names(final String dbName, final String tblName,
            final List<String> partNames, boolean getColStats, List<String> processorCapabilities,
-           String processorId) throws TException {
+           String processorId, String validWriteIdList) throws TException {
 
       String[] dbNameParts = parseDbName(dbName, conf);
       String parsedCatName = dbNameParts[CAT_NAME];
@@ -6644,9 +6628,9 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         getMS().openTransaction();
         authorizeTableForPartitionMetadata(parsedCatName, parsedDbName, tblName);
 
-        fireReadTablePreEvent(parsedCatName, parsedDbName, tblName);
+        fireReadTablePreEvent(parsedCatName, parsedDbName, tblName, validWriteIdList);
 
-        ret = getMS().getPartitionsByNames(parsedCatName, parsedDbName, tblName, partNames);
+        ret = getMS().getPartitionsByNames(parsedCatName, parsedDbName, tblName, partNames, validWriteIdList);
         ret = FilterUtils.filterPartitionsIfEnabled(isServerFilterEnabled, filterHook, ret);
 
         // If requested add column statistics in each of the partition objects
@@ -6659,7 +6643,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             List<ColumnStatistics> partColStatsList =
                     getMS().getPartitionColumnStatistics(parsedCatName, parsedDbName, tblName,
                             Collections.singletonList(partName),
-                            StatsSetupConst.getColumnsHavingStats(part.getParameters()));
+                            StatsSetupConst.getColumnsHavingStats(part.getParameters()), validWriteIdList);
             if (partColStatsList != null && !partColStatsList.isEmpty()) {
               ColumnStatistics partColStats = partColStatsList.get(0);
               if (partColStats != null) {
@@ -6724,7 +6708,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           String catName = hiveObject.isSetCatName() ? hiveObject.getCatName() :
               getDefaultCatalog(conf);
           Table table = get_table_core(catName, hiveObject.getDbName(), hiveObject
-              .getObjectName());
+              .getObjectName(), null);
           partName = Warehouse
               .makePartName(table.getPartitionKeys(), partValue);
         } catch (NoSuchObjectException e) {
@@ -7162,7 +7146,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         if (dbName == null) {
           return getMS().listPrincipalPartitionColumnGrantsAll(principalName, principalType);
         }
-        Table tbl = get_table_core(catName, dbName, tableName);
+        Table tbl = get_table_core(catName, dbName, tableName, null);
         String partName = Warehouse.makePartName(tbl.getPartitionKeys(), partValues);
         if (principalName == null) {
           return getMS().listPartitionColumnGrantsAll(catName, dbName, tableName, partName, columnName);
@@ -7207,7 +7191,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         if (dbName == null) {
           return getMS().listPrincipalPartitionGrantsAll(principalName, principalType);
         }
-        Table tbl = get_table_core(catName, dbName, tableName);
+        Table tbl = get_table_core(catName, dbName, tableName, null);
         String partName = Warehouse.makePartName(tbl.getPartitionKeys(), partValues);
         if (principalName == null) {
           return getMS().listPartitionGrantsAll(catName, dbName, tableName, partName);
@@ -7478,6 +7462,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       boolean success = false;
       try {
         String[] parsedDbName = parseDbName(db_name, conf);
+
         ms.openTransaction();
         startPartitionFunction("markPartitionForEvent", parsedDbName[CAT_NAME], parsedDbName[DB_NAME],
             tbl_name, partName);
@@ -7497,6 +7482,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
 
         success = ms.commitTransaction();
+
         for (MetaStoreEventListener listener : listeners) {
           listener.onLoadPartitionDone(new LoadPartitionDoneEvent(true, tbl, partName, this));
         }
@@ -8013,7 +7999,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
     private Partition getPartitionObj(String db, String table, List<String> partitionVals, Table tableObj)
             throws MetaException, NoSuchObjectException {
       if (tableObj.isSetPartitionKeys() && !tableObj.getPartitionKeys().isEmpty()) {
-        return get_partition(db, table, partitionVals);
+        return get_partition(db, table, partitionVals, null);
       }
       return null;
     }
@@ -8218,6 +8204,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       List<String> colNames, Map<String, ColumnStatistics> newStatsMap, SetPartitionsStatsRequest request)
           throws MetaException, NoSuchObjectException, InvalidObjectException, InvalidInputException {
       RawStore ms = getMS();
+
       ms.openTransaction();
       boolean isCommitted = false, result = false;
       try {
@@ -8236,7 +8223,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         }
 
         // another single call to get all the partition objects
-        List<Partition> partitions = ms.getPartitionsByNames(catName, dbName, tableName, partitionNames);
+        List<Partition> partitions = ms.getPartitionsByNames(catName, dbName, tableName, partitionNames, null);
         Map<String, Partition> mapToPart = new HashMap<>();
         for (int index = 0; index < partitionNames.size(); index++) {
           mapToPart.put(partitionNames.get(index), partitions.get(index));
@@ -8297,6 +8284,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
         NoSuchObjectException, InvalidObjectException, InvalidInputException {
       ColumnStatistics firstColStats = request.getColStats().get(0);
       RawStore ms = getMS();
+
       ms.openTransaction();
       boolean isCommitted = false, result = false;
       try {
@@ -8562,7 +8550,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
       ms.openTransaction();
       boolean success = false;
       try {
-        Table tbl = ms.getTable(DEFAULT_CATALOG_NAME, dbName, tblName);
+        Table tbl = ms.getTable(DEFAULT_CATALOG_NAME, dbName, tblName, null);
         if (tbl == null) {
           throw new NoSuchObjectException(dbName + "." + tblName + " not found");
         }
@@ -8587,7 +8575,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
           if (partName != null) {
             partNames = Lists.newArrayList(partName);
           } else if (isAllPart) {
-            partNames = ms.listPartitionNames(DEFAULT_CATALOG_NAME, dbName, tblName, (short)-1);
+            partNames = ms.listPartitionNames(DEFAULT_CATALOG_NAME, dbName, tblName, (short)-1, null);
           } else {
             throw new MetaException("Table is partitioned");
           }
@@ -8600,7 +8588,7 @@ public class HiveMetaStore extends ThriftHiveMetastore {
             int currentBatchSize = Math.min(batchSize, partNames.size() - index);
             List<String> nameBatch = partNames.subList(index, index + currentBatchSize);
             index += currentBatchSize;
-            List<Partition> parts = ms.getPartitionsByNames(DEFAULT_CATALOG_NAME, dbName, tblName, nameBatch);
+            List<Partition> parts = ms.getPartitionsByNames(DEFAULT_CATALOG_NAME, dbName, tblName, nameBatch, null);
             for (Partition part : parts) {
               if (!part.isSetSd() || !part.getSd().isSetLocation()) {
                 throw new MetaException("Partition does not have storage location;" +

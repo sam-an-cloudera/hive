@@ -69,7 +69,7 @@ final class HMSBenchmarks {
     String dbName = data.dbName;
 
     return benchmark.measure(() ->
-        throwingSupplierWrapper(() -> client.getAllTables(dbName, null)));
+        throwingSupplierWrapper(() -> client.getAllTables(dbName, null, null)));
   }
 
   static DescriptiveStatistics benchmarkTableCreate(@NotNull MicroBenchmark bench,
@@ -131,7 +131,7 @@ final class HMSBenchmarks {
     createPartitionedTable(client, dbName, tableName);
     try {
       return bench.measure(() ->
-          throwingSupplierWrapper(() -> client.getTable(dbName, tableName)));
+          throwingSupplierWrapper(() -> client.getTable(dbName, tableName, null)));
     } finally {
       throwingSupplierWrapper(() -> client.dropTable(dbName, tableName));
     }
@@ -148,7 +148,7 @@ final class HMSBenchmarks {
     try {
       createManyTables(client, count, dbName, format);
       return bench.measure(() ->
-          throwingSupplierWrapper(() -> client.getAllTables(dbName, null)));
+          throwingSupplierWrapper(() -> client.getAllTables(dbName, null, null)));
     } finally {
       dropManyTables(client, count, dbName, format);
     }
@@ -163,7 +163,7 @@ final class HMSBenchmarks {
     createPartitionedTable(client, dbName, tableName);
     final List<String> values = Collections.singletonList("d1");
     try {
-      Table t = client.getTable(dbName, tableName);
+      Table t = client.getTable(dbName, tableName, null);
       Partition partition = new Util.PartitionBuilder(t)
           .withValues(values)
           .build();
@@ -191,7 +191,7 @@ final class HMSBenchmarks {
           Collections.singletonList("d"), 1);
 
       return bench.measure(() ->
-          throwingSupplierWrapper(() -> client.listPartitions(dbName, tableName)));
+          throwingSupplierWrapper(() -> client.listPartitions(dbName, tableName, null)));
     } catch (TException e) {
       e.printStackTrace();
       return new DescriptiveStatistics();
@@ -213,7 +213,7 @@ final class HMSBenchmarks {
       LOG.debug("Created {} partitions", howMany);
       LOG.debug("started benchmark... ");
       return bench.measure(() ->
-          throwingSupplierWrapper(() -> client.listPartitions(dbName, tableName)));
+          throwingSupplierWrapper(() -> client.listPartitions(dbName, tableName, null)));
     } catch (TException e) {
       e.printStackTrace();
       return new DescriptiveStatistics();
@@ -235,7 +235,7 @@ final class HMSBenchmarks {
       LOG.debug("Created {} partitions", howMany);
       LOG.debug("started benchmark... ");
       return bench.measure(() ->
-          throwingSupplierWrapper(() -> client.getPartitions(dbName, tableName)));
+          throwingSupplierWrapper(() -> client.getPartitions(dbName, tableName, null)));
     } catch (TException e) {
       e.printStackTrace();
       return new DescriptiveStatistics();
@@ -253,7 +253,7 @@ final class HMSBenchmarks {
     createPartitionedTable(client, dbName, tableName);
     final List<String> values = Collections.singletonList("d1");
     try {
-      Table t = client.getTable(dbName, tableName);
+      Table t = client.getTable(dbName, tableName, null);
       Partition partition = new Util.PartitionBuilder(t)
           .withValues(values)
           .build();
@@ -324,7 +324,7 @@ final class HMSBenchmarks {
       addManyPartitionsNoException(client, dbName, tableName, null,
           Collections.singletonList("d"), count);
       return bench.measure(
-          () -> throwingSupplierWrapper(() -> client.getPartitionNames(dbName, tableName))
+          () -> throwingSupplierWrapper(() -> client.getPartitionNames(dbName, tableName, null))
       );
     } finally {
       throwingSupplierWrapper(() -> client.dropTable(dbName, tableName));
@@ -343,11 +343,11 @@ final class HMSBenchmarks {
       addManyPartitionsNoException(client, dbName, tableName, null,
           Collections.singletonList("d"), count);
       List<String> partitionNames = throwingSupplierWrapper(() ->
-          client.getPartitionNames(dbName, tableName));
+          client.getPartitionNames(dbName, tableName, null));
       return bench.measure(
           () ->
               throwingSupplierWrapper(() ->
-                  client.getPartitionsByNames(dbName, tableName, partitionNames))
+                  client.getPartitionsByNames(dbName, tableName, partitionNames, null))
       );
     } finally {
       throwingSupplierWrapper(() -> client.dropTable(dbName, tableName));
@@ -365,7 +365,7 @@ final class HMSBenchmarks {
     try {
       addManyPartitionsNoException(client, dbName, tableName, null,
           Collections.singletonList("d"), count);
-      Table oldTable = client.getTable(dbName, tableName);
+      Table oldTable = client.getTable(dbName, tableName, null);
       oldTable.getSd().setLocation("");
       Table newTable = oldTable.deepCopy();
       newTable.setTableName(tableName + "_renamed");

@@ -194,7 +194,7 @@ public class HMSClientTest {
   public void getAllTables() throws TException {
     try {
       client.createTable(TEST_TABLE);
-      assertThat(client.getAllTables(TEST_DATABASE, null), Matchers.contains(TEST_TABLE_NAME));
+      assertThat(client.getAllTables(TEST_DATABASE, null, null), Matchers.contains(TEST_TABLE_NAME));
     } catch (Exception e) {
       System.out.println(e.getMessage());
       e.printStackTrace();

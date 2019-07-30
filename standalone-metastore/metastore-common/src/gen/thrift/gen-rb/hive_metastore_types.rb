@@ -2176,6 +2176,7 @@ class PartitionsByExprRequest
   DEFAULTPARTITIONNAME = 4
   MAXPARTS = 5
   CATNAME = 6
+  VALIDWRITEIDLIST = 7
 
   FIELDS = {
     DBNAME => {:type => ::Thrift::Types::STRING, :name => 'dbName'},
@@ -2183,7 +2184,8 @@ class PartitionsByExprRequest
     EXPR => {:type => ::Thrift::Types::STRING, :name => 'expr', :binary => true},
     DEFAULTPARTITIONNAME => {:type => ::Thrift::Types::STRING, :name => 'defaultPartitionName', :optional => true},
     MAXPARTS => {:type => ::Thrift::Types::I16, :name => 'maxParts', :default => -1, :optional => true},
-    CATNAME => {:type => ::Thrift::Types::STRING, :name => 'catName', :optional => true}
+    CATNAME => {:type => ::Thrift::Types::STRING, :name => 'catName', :optional => true},
+    VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList', :optional => true}
   }
 
   def struct_fields; FIELDS; end
@@ -2452,6 +2454,7 @@ class PartitionValuesRequest
   ASCENDING = 7
   MAXPARTS = 8
   CATNAME = 9
+  VALIDWRITEIDLIST = 10
 
   FIELDS = {
     DBNAME => {:type => ::Thrift::Types::STRING, :name => 'dbName'},
@@ -2462,7 +2465,8 @@ class PartitionValuesRequest
     PARTITIONORDER => {:type => ::Thrift::Types::LIST, :name => 'partitionOrder', :element => {:type => ::Thrift::Types::STRUCT, :class => ::FieldSchema}, :optional => true},
     ASCENDING => {:type => ::Thrift::Types::BOOL, :name => 'ascending', :default => true, :optional => true},
     MAXPARTS => {:type => ::Thrift::Types::I64, :name => 'maxParts', :default => -1, :optional => true},
-    CATNAME => {:type => ::Thrift::Types::STRING, :name => 'catName', :optional => true}
+    CATNAME => {:type => ::Thrift::Types::STRING, :name => 'catName', :optional => true},
+    VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList', :optional => true}
   }
 
   def struct_fields; FIELDS; end
@@ -2518,6 +2522,7 @@ class GetPartitionsByNamesRequest
   GET_COL_STATS = 4
   PROCESSORCAPABILITIES = 5
   PROCESSORIDENTIFIER = 6
+  VALIDWRITEIDLIST = 7
 
   FIELDS = {
     DB_NAME => {:type => ::Thrift::Types::STRING, :name => 'db_name'},
@@ -2525,7 +2530,8 @@ class GetPartitionsByNamesRequest
     NAMES => {:type => ::Thrift::Types::LIST, :name => 'names', :element => {:type => ::Thrift::Types::STRING}, :optional => true},
     GET_COL_STATS => {:type => ::Thrift::Types::BOOL, :name => 'get_col_stats', :optional => true},
     PROCESSORCAPABILITIES => {:type => ::Thrift::Types::LIST, :name => 'processorCapabilities', :element => {:type => ::Thrift::Types::STRING}, :optional => true},
-    PROCESSORIDENTIFIER => {:type => ::Thrift::Types::STRING, :name => 'processorIdentifier', :optional => true}
+    PROCESSORIDENTIFIER => {:type => ::Thrift::Types::STRING, :name => 'processorIdentifier', :optional => true},
+    VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList', :optional => true}
   }
 
   def struct_fields; FIELDS; end
@@ -2966,6 +2972,43 @@ class TableValidWriteIds
     raise ::Thrift::ProtocolException.new(::Thrift::ProtocolException::UNKNOWN, 'Required field writeIdHighWaterMark is unset!') unless @writeIdHighWaterMark
     raise ::Thrift::ProtocolException.new(::Thrift::ProtocolException::UNKNOWN, 'Required field invalidWriteIds is unset!') unless @invalidWriteIds
     raise ::Thrift::ProtocolException.new(::Thrift::ProtocolException::UNKNOWN, 'Required field abortedBits is unset!') unless @abortedBits
+  end
+
+  ::Thrift::Struct.generate_accessors self
+end
+
+class TableWriteId
+  include ::Thrift::Struct, ::Thrift::Struct_Union
+  FULLTABLENAME = 1
+  WRITEID = 2
+
+  FIELDS = {
+    FULLTABLENAME => {:type => ::Thrift::Types::STRING, :name => 'fullTableName'},
+    WRITEID => {:type => ::Thrift::Types::I64, :name => 'writeId'}
+  }
+
+  def struct_fields; FIELDS; end
+
+  def validate
+    raise ::Thrift::ProtocolException.new(::Thrift::ProtocolException::UNKNOWN, 'Required field fullTableName is unset!') unless @fullTableName
+    raise ::Thrift::ProtocolException.new(::Thrift::ProtocolException::UNKNOWN, 'Required field writeId is unset!') unless @writeId
+  end
+
+  ::Thrift::Struct.generate_accessors self
+end
+
+class GetTxnTableWriteIdsResponse
+  include ::Thrift::Struct, ::Thrift::Struct_Union
+  TABLEWRITEIDS = 1
+
+  FIELDS = {
+    TABLEWRITEIDS => {:type => ::Thrift::Types::LIST, :name => 'tableWriteIds', :element => {:type => ::Thrift::Types::STRUCT, :class => ::TableWriteId}}
+  }
+
+  def struct_fields; FIELDS; end
+
+  def validate
+    raise ::Thrift::ProtocolException.new(::Thrift::ProtocolException::UNKNOWN, 'Required field tableWriteIds is unset!') unless @tableWriteIds
   end
 
   ::Thrift::Struct.generate_accessors self
@@ -5604,6 +5647,7 @@ class GetPartitionsRequest
   FILTERSPEC = 8
   PROCESSORCAPABILITIES = 9
   PROCESSORIDENTIFIER = 10
+  VALIDWRITEIDLIST = 11
 
   FIELDS = {
     CATNAME => {:type => ::Thrift::Types::STRING, :name => 'catName', :optional => true},
@@ -5615,7 +5659,8 @@ class GetPartitionsRequest
     PROJECTIONSPEC => {:type => ::Thrift::Types::STRUCT, :name => 'projectionSpec', :class => ::GetPartitionsProjectionSpec},
     FILTERSPEC => {:type => ::Thrift::Types::STRUCT, :name => 'filterSpec', :class => ::GetPartitionsFilterSpec},
     PROCESSORCAPABILITIES => {:type => ::Thrift::Types::LIST, :name => 'processorCapabilities', :element => {:type => ::Thrift::Types::STRING}, :optional => true},
-    PROCESSORIDENTIFIER => {:type => ::Thrift::Types::STRING, :name => 'processorIdentifier', :optional => true}
+    PROCESSORIDENTIFIER => {:type => ::Thrift::Types::STRING, :name => 'processorIdentifier', :optional => true},
+    VALIDWRITEIDLIST => {:type => ::Thrift::Types::STRING, :name => 'validWriteIdList', :optional => true}
   }
 
   def struct_fields; FIELDS; end

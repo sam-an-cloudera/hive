@@ -158,7 +158,6 @@ public class QTestUtil {
 
     // Plug verifying metastore in for testing DirectSQL.
     conf.setVar(ConfVars.METASTORE_RAW_STORE_IMPL, "org.apache.hadoop.hive.metastore.VerifyingObjectStore");
-
     miniClusters.initConf(conf);
   }
 
@@ -378,6 +377,7 @@ public class QTestUtil {
     miniClusters.restartSessions(canReuseSession, ss, oldSs);
     closeSession(oldSs);
 
+    ss.initTxnMgr(conf);
     SessionState.start(ss);
 
     cliDriver = new CliDriver();

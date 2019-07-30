@@ -154,25 +154,20 @@ public class InjectableBehaviourObjectStore extends ObjectStore {
 
   // ObjectStore methods to be overridden with injected behavior
   @Override
-  public Table getTable(String catName, String dbName, String tableName) throws MetaException {
-    return getTableModifier.apply(super.getTable(catName, dbName, tableName));
-  }
-
-  @Override
   public Table getTable(String catName, String dbName, String tableName, String writeIdList) throws MetaException {
     return getTableModifier.apply(super.getTable(catName, dbName, tableName, writeIdList));
   }
 
   @Override
   public Partition getPartition(String catName, String dbName, String tableName,
-                                List<String> partVals) throws NoSuchObjectException, MetaException {
-    return getPartitionModifier.apply(super.getPartition(catName, dbName, tableName, partVals));
+                                List<String> partVals, String validWriteIdList) throws NoSuchObjectException, MetaException {
+    return getPartitionModifier.apply(super.getPartition(catName, dbName, tableName, partVals, validWriteIdList));
   }
 
   @Override
-  public List<String> listPartitionNames(String catName, String dbName, String tableName, short max)
+  public List<String> listPartitionNames(String catName, String dbName, String tableName, short max, String validWriteIdList)
           throws MetaException {
-    return listPartitionNamesModifier.apply(super.listPartitionNames(catName, dbName, tableName, max));
+    return listPartitionNamesModifier.apply(super.listPartitionNames(catName, dbName, tableName, max, validWriteIdList));
   }
 
   @Override

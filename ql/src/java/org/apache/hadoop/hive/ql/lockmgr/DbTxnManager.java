@@ -680,7 +680,6 @@ public final class DbTxnManager extends HiveTxnManagerImpl {
 
   @Override
   public ValidTxnList getValidTxns() throws LockException {
-    assert isTxnOpen();
     init();
     try {
       return getMS().getValidTxns(txnId);
@@ -692,7 +691,6 @@ public final class DbTxnManager extends HiveTxnManagerImpl {
   @Override
   public ValidTxnWriteIdList getValidWriteIds(List<String> tableList,
                                               String validTxnList) throws LockException {
-    assert isTxnOpen();
     assert validTxnList != null && !validTxnList.isEmpty();
     try {
       return TxnCommonUtils.createValidTxnWriteIdList(

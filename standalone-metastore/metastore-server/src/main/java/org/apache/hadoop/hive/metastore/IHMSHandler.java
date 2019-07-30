@@ -28,7 +28,6 @@ import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.api.ThriftHiveMetastore;
 import org.apache.hadoop.hive.metastore.txn.TxnStore;
-import org.apache.hadoop.hive.metastore.utils.MetaStoreUtils;
 
 /**
  * An interface wrapper for HMSHandler.  This interface contains methods that need to be
@@ -83,16 +82,12 @@ public interface IHMSHandler extends ThriftHiveMetastore.Iface, Configurable {
    * @param catName catalog name
    * @param dbname database name
    * @param name table name
+   * @param validWriteIdList valid writeId to read
    * @return Table object
    * @throws NoSuchObjectException If the table does not exist.
    * @throws MetaException  If another error occurs.
    */
-  Table get_table_core(final String catName, final String dbname, final String name)
-      throws MetaException, NoSuchObjectException;
-
-  Table get_table_core(final String catName, final String dbname,
-                       final String name,
-                       final String writeIdList)
+  Table get_table_core(final String catName, final String dbname, final String name, final String writeIdList)
       throws MetaException, NoSuchObjectException;
 
   /**

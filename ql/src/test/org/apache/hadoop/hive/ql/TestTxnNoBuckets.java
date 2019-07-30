@@ -95,14 +95,14 @@ public class TestTxnNoBuckets extends TxnCommandsBaseForTests {
     /**the insert creates 2 output files (presumably because there are 2 input files)
      * The number in the file name is writerId.  This is the number encoded in ROW__ID.bucketId -
      * see {@link org.apache.hadoop.hive.ql.io.BucketCodec}*/
-    Assert.assertTrue(rs.get(0), rs.get(0).startsWith("{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t0\t0\t0\t"));
-    Assert.assertTrue(rs.get(0), rs.get(0).endsWith("nobuckets/delta_0000001_0000001_0000/bucket_00000"));
-    Assert.assertTrue(rs.get(1), rs.get(1).startsWith("{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t3\t3\t3\t"));
-    Assert.assertTrue(rs.get(1), rs.get(1).endsWith("nobuckets/delta_0000001_0000001_0000/bucket_00000"));
-    Assert.assertTrue(rs.get(2), rs.get(2).startsWith("{\"writeid\":1,\"bucketid\":536936448,\"rowid\":0}\t1\t1\t1\t"));
-    Assert.assertTrue(rs.get(2), rs.get(2).endsWith("nobuckets/delta_0000001_0000001_0000/bucket_00001"));
-    Assert.assertTrue(rs.get(3), rs.get(3).startsWith("{\"writeid\":1,\"bucketid\":536936448,\"rowid\":1}\t2\t2\t2\t"));
-    Assert.assertTrue(rs.get(3), rs.get(3).endsWith("nobuckets/delta_0000001_0000001_0000/bucket_00001"));
+    Assert.assertTrue(rs.get(0), rs.get(0).startsWith("{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t0\t0\t0\t"));
+    Assert.assertTrue(rs.get(0), rs.get(0).endsWith("nobuckets/delta_0000002_0000002_0000/bucket_00000"));
+    Assert.assertTrue(rs.get(1), rs.get(1).startsWith("{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t3\t3\t3\t"));
+    Assert.assertTrue(rs.get(1), rs.get(1).endsWith("nobuckets/delta_0000002_0000002_0000/bucket_00000"));
+    Assert.assertTrue(rs.get(2), rs.get(2).startsWith("{\"writeid\":2,\"bucketid\":536936448,\"rowid\":0}\t1\t1\t1\t"));
+    Assert.assertTrue(rs.get(2), rs.get(2).endsWith("nobuckets/delta_0000002_0000002_0000/bucket_00001"));
+    Assert.assertTrue(rs.get(3), rs.get(3).startsWith("{\"writeid\":2,\"bucketid\":536936448,\"rowid\":1}\t2\t2\t2\t"));
+    Assert.assertTrue(rs.get(3), rs.get(3).endsWith("nobuckets/delta_0000002_0000002_0000/bucket_00001"));
 
     hiveConf.setBoolVar(HiveConf.ConfVars.HIVE_EXPLAIN_USER, false);
     rs = runStatementOnDriver("explain  update nobuckets set c3 = 17 where c3 in(0,1)");
@@ -117,25 +117,25 @@ public class TestTxnNoBuckets extends TxnCommandsBaseForTests {
     for(String s : rs) {
       LOG.warn(s);
     }
-    Assert.assertTrue(rs.get(0), rs.get(0).startsWith("{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t3\t3\t3\t"));
-    Assert.assertTrue(rs.get(0), rs.get(0).endsWith("nobuckets/delta_0000001_0000001_0000/bucket_00000"));
-    Assert.assertTrue(rs.get(1), rs.get(1).startsWith("{\"writeid\":1,\"bucketid\":536936448,\"rowid\":1}\t2\t2\t2\t"));
-    Assert.assertTrue(rs.get(1), rs.get(1).endsWith("nobuckets/delta_0000001_0000001_0000/bucket_00001"));
+    Assert.assertTrue(rs.get(0), rs.get(0).startsWith("{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t3\t3\t3\t"));
+    Assert.assertTrue(rs.get(0), rs.get(0).endsWith("nobuckets/delta_0000002_0000002_0000/bucket_00000"));
+    Assert.assertTrue(rs.get(1), rs.get(1).startsWith("{\"writeid\":2,\"bucketid\":536936448,\"rowid\":1}\t2\t2\t2\t"));
+    Assert.assertTrue(rs.get(1), rs.get(1).endsWith("nobuckets/delta_0000002_0000002_0000/bucket_00001"));
     //so update has 1 writer, but which creates buckets where the new rows land
-    Assert.assertTrue(rs.get(2), rs.get(2).startsWith("{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t0\t0\t17\t"));
-    Assert.assertTrue(rs.get(2), rs.get(2).endsWith("nobuckets/delta_0000002_0000002_0000/bucket_00000"));
+    Assert.assertTrue(rs.get(2), rs.get(2).startsWith("{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t0\t0\t17\t"));
+    Assert.assertTrue(rs.get(2), rs.get(2).endsWith("nobuckets/delta_0000003_0000003_0000/bucket_00000"));
     // update for "{\"writeid\":1,\"bucketid\":536936448,\"rowid\":0}\t1\t1\t1\t"
-    Assert.assertTrue(rs.get(3), rs.get(3).startsWith("{\"writeid\":2,\"bucketid\":536936448,\"rowid\":0}\t1\t1\t17\t"));
-    Assert.assertTrue(rs.get(3), rs.get(3).endsWith("nobuckets/delta_0000002_0000002_0000/bucket_00001"));
+    Assert.assertTrue(rs.get(3), rs.get(3).startsWith("{\"writeid\":3,\"bucketid\":536936448,\"rowid\":0}\t1\t1\t17\t"));
+    Assert.assertTrue(rs.get(3), rs.get(3).endsWith("nobuckets/delta_0000003_0000003_0000/bucket_00001"));
 
     Set<String> expectedFiles = new HashSet<>();
     //both delete events land in corresponding buckets to the original row-ids
-    expectedFiles.add("ts/delete_delta_0000002_0000002_0000/bucket_00000");
-    expectedFiles.add("ts/delete_delta_0000002_0000002_0000/bucket_00001");
-    expectedFiles.add("nobuckets/delta_0000001_0000001_0000/bucket_00000");
-    expectedFiles.add("nobuckets/delta_0000001_0000001_0000/bucket_00001");
+    expectedFiles.add("ts/delete_delta_0000003_0000003_0000/bucket_00000");
+    expectedFiles.add("ts/delete_delta_0000003_0000003_0000/bucket_00001");
     expectedFiles.add("nobuckets/delta_0000002_0000002_0000/bucket_00000");
     expectedFiles.add("nobuckets/delta_0000002_0000002_0000/bucket_00001");
+    expectedFiles.add("nobuckets/delta_0000003_0000003_0000/bucket_00000");
+    expectedFiles.add("nobuckets/delta_0000003_0000003_0000/bucket_00001");
     //check that we get the right files on disk
     assertExpectedFileSet(expectedFiles, getWarehouseDir() + "/nobuckets");
     //todo: it would be nice to check the contents of the files... could use orc.FileDump - it has
@@ -163,10 +163,10 @@ public class TestTxnNoBuckets extends TxnCommandsBaseForTests {
     */
 
     String expected[][] = {
-        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t0\t0\t17", "nobuckets/base_0000002_v0000025/bucket_00000"},
-        {"{\"writeid\":2,\"bucketid\":536936448,\"rowid\":0}\t1\t1\t17", "nobuckets/base_0000002_v0000025/bucket_00001"},
-        {"{\"writeid\":1,\"bucketid\":536936448,\"rowid\":1}\t2\t2\t2", "nobuckets/base_0000002_v0000025/bucket_00001"},
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t3\t3\t3", "nobuckets/base_0000002_v0000025/bucket_00000"}
+        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t0\t0\t17", "nobuckets/base_0000003_v0000025/bucket_00000"},
+        {"{\"writeid\":3,\"bucketid\":536936448,\"rowid\":0}\t1\t1\t17", "nobuckets/base_0000003_v0000025/bucket_00001"},
+        {"{\"writeid\":2,\"bucketid\":536936448,\"rowid\":1}\t2\t2\t2", "nobuckets/base_0000003_v0000025/bucket_00001"},
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t3\t3\t3", "nobuckets/base_0000003_v0000025/bucket_00000"}
     };
     checkResult(expected,
         "select ROW__ID, c1, c2, c3" + (shouldVectorize() ? "" : ", INPUT__FILE__NAME")
@@ -175,14 +175,14 @@ public class TestTxnNoBuckets extends TxnCommandsBaseForTests {
         "After Major Compaction", LOG);
 
     expectedFiles.clear();
-    expectedFiles.add("obuckets/delete_delta_0000002_0000002_0000/bucket_00000");
-    expectedFiles.add("obuckets/delete_delta_0000002_0000002_0000/bucket_00001");
-    expectedFiles.add("house/nobuckets/delta_0000001_0000001_0000/bucket_00000");
-    expectedFiles.add("house/nobuckets/delta_0000001_0000001_0000/bucket_00001");
+    expectedFiles.add("obuckets/delete_delta_0000003_0000003_0000/bucket_00000");
+    expectedFiles.add("obuckets/delete_delta_0000003_0000003_0000/bucket_00001");
     expectedFiles.add("house/nobuckets/delta_0000002_0000002_0000/bucket_00000");
     expectedFiles.add("house/nobuckets/delta_0000002_0000002_0000/bucket_00001");
-    expectedFiles.add("/warehouse/nobuckets/base_0000002_v0000025/bucket_00000");
-    expectedFiles.add("/warehouse/nobuckets/base_0000002_v0000025/bucket_00001");
+    expectedFiles.add("house/nobuckets/delta_0000003_0000003_0000/bucket_00000");
+    expectedFiles.add("house/nobuckets/delta_0000003_0000003_0000/bucket_00001");
+    expectedFiles.add("/warehouse/nobuckets/base_0000003_v0000025/bucket_00000");
+    expectedFiles.add("/warehouse/nobuckets/base_0000003_v0000025/bucket_00001");
     assertExpectedFileSet(expectedFiles, getWarehouseDir() + "/nobuckets");
 
     TestTxnCommands2.runCleaner(hiveConf);
@@ -191,8 +191,8 @@ public class TestTxnNoBuckets extends TxnCommandsBaseForTests {
     Assert.assertEquals("Unexpected result after clean", stringifyValues(result), rs);
 
     expectedFiles.clear();
-    expectedFiles.add("/warehouse/nobuckets/base_0000002_v0000025/bucket_00000");
-    expectedFiles.add("/warehouse/nobuckets/base_0000002_v0000025/bucket_00001");
+    expectedFiles.add("/warehouse/nobuckets/base_0000003_v0000025/bucket_00000");
+    expectedFiles.add("/warehouse/nobuckets/base_0000003_v0000025/bucket_00001");
     assertExpectedFileSet(expectedFiles, getWarehouseDir() + "/nobuckets");
   }
 
@@ -260,8 +260,8 @@ public class TestTxnNoBuckets extends TxnCommandsBaseForTests {
       "'='true', 'transactional_properties'='default') as select a, b from " + Table.ACIDTBL);
     rs = runStatementOnDriver("select ROW__ID, a, b, INPUT__FILE__NAME from myctas2 order by ROW__ID");
     String expected2[][] = {
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t1\t2", "warehouse/myctas2/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536936448,\"rowid\":0}\t3\t4", "warehouse/myctas2/delta_0000001_0000001_0000/bucket_00001"}
+        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t3\t4", "warehouse/myctas2/delta_0000001_0000001_0000/bucket_00000"},
+        {"{\"writeid\":1,\"bucketid\":536936448,\"rowid\":0}\t1\t2", "warehouse/myctas2/delta_0000001_0000001_0000/bucket_00001"}
     };
     checkExpected(rs, expected2, "Unexpected row count after ctas from acid table");
 
@@ -333,11 +333,11 @@ ekoifman:apache-hive-3.0.0-SNAPSHOT-bin ekoifman$ tree /Users/ekoifman/dev/hiver
     List<String> rs = runStatementOnDriver("select ROW__ID, a, b, INPUT__FILE__NAME from T order by ROW__ID");
 
     String expected[][] = {
-        {"{\"writeid\":1,\"bucketid\":536870913,\"rowid\":0}\t1\t2", "/delta_0000001_0000001_0001/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870913,\"rowid\":1}\t3\t4", "/delta_0000001_0000001_0001/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870914,\"rowid\":0}\t5\t6", "/delta_0000001_0000001_0002/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870915,\"rowid\":0}\t9\t10", "/delta_0000001_0000001_0003/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536936450,\"rowid\":0}\t7\t8", "/delta_0000001_0000001_0002/bucket_00001"},
+        {"{\"writeid\":2,\"bucketid\":536870913,\"rowid\":0}\t1\t2", "/delta_0000002_0000002_0001/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870913,\"rowid\":1}\t3\t4", "/delta_0000002_0000002_0001/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870914,\"rowid\":0}\t5\t6", "/delta_0000002_0000002_0002/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870915,\"rowid\":0}\t9\t10", "/delta_0000002_0000002_0003/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536936450,\"rowid\":0}\t7\t8", "/delta_0000002_0000002_0002/bucket_00001"},
     };
     checkExpected(rs, expected, "Unexpected row count after ctas");
   }
@@ -794,14 +794,14 @@ ekoifman:apache-hive-3.0.0-SNAPSHOT-bin ekoifman$ tree /Users/ekoifman/dev/hiver
     String query = "select ROW__ID, p, q, a, b, INPUT__FILE__NAME from T order by p, q, a, b";
     List<String> rs = runStatementOnDriver(query);
     String[][] expected = {
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t1\t1\t4\t1", "t/p=1/q=1/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t1\t1\t4\t3", "t/p=1/q=1/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t1\t1\t5\t1", "t/p=1/q=1/delta_0000003_0000003_0000/bucket_00000"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":1}\t1\t1\t5\t3", "t/p=1/q=1/delta_0000003_0000003_0000/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t1\t2\t4\t2", "t/p=1/q=2/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t1\t2\t4\t4", "t/p=1/q=2/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t1\t2\t5\t2", "t/p=1/q=2/delta_0000003_0000003_0000/bucket_00000"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":1}\t1\t2\t5\t4", "t/p=1/q=2/delta_0000003_0000003_0000/bucket_00000"}
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t1\t1\t4\t1", "t/p=1/q=1/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t1\t1\t4\t3", "t/p=1/q=1/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":0}\t1\t1\t5\t1", "t/p=1/q=1/delta_0000004_0000004_0000/bucket_00000"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":1}\t1\t1\t5\t3", "t/p=1/q=1/delta_0000004_0000004_0000/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t1\t2\t4\t2", "t/p=1/q=2/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t1\t2\t4\t4", "t/p=1/q=2/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":0}\t1\t2\t5\t2", "t/p=1/q=2/delta_0000004_0000004_0000/bucket_00000"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":1}\t1\t2\t5\t4", "t/p=1/q=2/delta_0000004_0000004_0000/bucket_00000"}
     };
     checkExpected(rs, expected, "insert data");
 
@@ -812,14 +812,14 @@ ekoifman:apache-hive-3.0.0-SNAPSHOT-bin ekoifman$ tree /Users/ekoifman/dev/hiver
     query = "select ROW__ID, p, q, a, b, INPUT__FILE__NAME from T order by p, q, a, b";
     rs = runStatementOnDriver(query);
     String[][] expected2 = {
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t1\t1\t4\t1", "t/p=1/q=1/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t1\t1\t4\t3", "t/p=1/q=1/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t1\t1\t5\t1", "t/p=1/q=1/delta_0000003_0000003_0000/bucket_00000"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":1}\t1\t1\t5\t3", "t/p=1/q=1/delta_0000003_0000003_0000/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t1\t2\t4\t2", "t/p=1/q=2/base_0000003_v0000020/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t1\t2\t4\t4", "t/p=1/q=2/base_0000003_v0000020/bucket_00000"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t1\t2\t5\t2", "t/p=1/q=2/base_0000003_v0000020/bucket_00000"},
-        {"{\"writeid\":3,\"bucketid\":536870912,\"rowid\":1}\t1\t2\t5\t4", "t/p=1/q=2/base_0000003_v0000020/bucket_00000"}
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t1\t1\t4\t1", "t/p=1/q=1/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t1\t1\t4\t3", "t/p=1/q=1/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":0}\t1\t1\t5\t1", "t/p=1/q=1/delta_0000004_0000004_0000/bucket_00000"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":1}\t1\t1\t5\t3", "t/p=1/q=1/delta_0000004_0000004_0000/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t1\t2\t4\t2", "t/p=1/q=2/base_0000004_v0000020/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t1\t2\t4\t4", "t/p=1/q=2/base_0000004_v0000020/bucket_00000"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":0}\t1\t2\t5\t2", "t/p=1/q=2/base_0000004_v0000020/bucket_00000"},
+        {"{\"writeid\":4,\"bucketid\":536870912,\"rowid\":1}\t1\t2\t5\t4", "t/p=1/q=2/base_0000004_v0000020/bucket_00000"}
     };
     checkExpected(rs, expected2, "after major compaction");
 
@@ -844,8 +844,8 @@ ekoifman:apache-hive-3.0.0-SNAPSHOT-bin ekoifman$ tree /Users/ekoifman/dev/hiver
     List<String> rs = runStatementOnDriver(query);
     String[][] expected = {
         //this proves data is written in Acid layout so T was made Acid
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t1\t2", "t/delta_0000001_0000001_0000/bucket_00000"},
-        {"{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t3\t4", "t/delta_0000001_0000001_0000/bucket_00000"}
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t1\t2", "t/delta_0000002_0000002_0000/bucket_00000"},
+        {"{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t3\t4", "t/delta_0000002_0000002_0000/bucket_00000"}
     };
     checkExpected(rs, expected, "insert data");
   }

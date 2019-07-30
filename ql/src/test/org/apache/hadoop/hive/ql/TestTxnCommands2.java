@@ -1243,8 +1243,8 @@ public class TestTxnCommands2 {
     FileStatus[] status = fs.listStatus(new Path(TEST_WAREHOUSE_DIR + "/" + tblName.toLowerCase()),
         FileUtils.HIDDEN_FILES_PATH_FILTER);
     Set<String> expectedDeltas = new HashSet<>();
-    expectedDeltas.add("delete_delta_0000001_0000002_v0000019");
-    expectedDeltas.add("delta_0000001_0000002_v0000019");
+    expectedDeltas.add("delete_delta_0000002_0000003_v0000019");
+    expectedDeltas.add("delta_0000002_0000003_v0000019");
     Set<String> actualDeltas = new HashSet<>();
     for(FileStatus file : status) {
       actualDeltas.add(file.getPath().getName());
@@ -2046,9 +2046,9 @@ public class TestTxnCommands2 {
     Assert.assertEquals(TxnDbUtil.queryToString(hiveConf, "select * from MIN_HISTORY_LEVEL"),
             0, TxnDbUtil.countQueryAgent(hiveConf, "select count(*) from MIN_HISTORY_LEVEL"));
     Assert.assertEquals(TxnDbUtil.queryToString(hiveConf, "select * from TXN_TO_WRITE_ID" + acidTblWhereClause),
-            3, TxnDbUtil.countQueryAgent(hiveConf, "select count(*) from TXN_TO_WRITE_ID" + acidTblWhereClause));
+            4, TxnDbUtil.countQueryAgent(hiveConf, "select count(*) from TXN_TO_WRITE_ID" + acidTblWhereClause));
     Assert.assertEquals(TxnDbUtil.queryToString(hiveConf, "select * from TXN_TO_WRITE_ID" + acidTblPartWhereClause),
-            2, TxnDbUtil.countQueryAgent(hiveConf, "select count(*) from TXN_TO_WRITE_ID" + acidTblPartWhereClause));
+            3, TxnDbUtil.countQueryAgent(hiveConf, "select count(*) from TXN_TO_WRITE_ID" + acidTblPartWhereClause));
 
     TxnStore txnHandler = TxnUtils.getTxnStore(hiveConf);
     txnHandler.compact(new CompactionRequest("default", Table.ACIDTBL.name().toLowerCase(), CompactionType.MAJOR));

@@ -41,7 +41,9 @@ import java.util.stream.Stream;
 
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.hadoop.hive.conf.HiveConf;
+import org.apache.hadoop.hive.metastore.ObjectStore;
 import org.apache.hadoop.hive.metastore.Warehouse;
+import org.apache.hadoop.hive.metastore.cache.CachedStore;
 import org.apache.hive.testutils.HiveTestEnvSetup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -222,6 +224,12 @@ public class MetaStoreDumpUtility {
       s.close();
 
       conn.close();
+
+      CachedStore.clearSharedCache();
+      ObjectStore objStore = new ObjectStore();
+      objStore.setConf(conf);
+      CachedStore.getSharedCache().initialize(conf);
+      CachedStore.prewarm(objStore, conf);
 
     } catch (Exception e) {
       throw new RuntimeException("error while loading tpcds metastore dump", e);

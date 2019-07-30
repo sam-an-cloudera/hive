@@ -465,6 +465,7 @@ public class ObjectStore implements RawStore, Configurable {
   @Override
   @SuppressWarnings("nls")
   public boolean commitTransaction() {
+    pm.flush();
     if (TXN_STATUS.ROLLBACK == transactionStatus) {
       debugLog("Commit transaction: rollback");
       return false;
@@ -1237,13 +1238,6 @@ public class ObjectStore implements RawStore, Configurable {
   }
 
   @Override
-  public Table
-  getTable(String catName, String dbName, String tableName)
-      throws MetaException {
-    return getTable(catName, dbName, tableName, null);
-  }
-
-  @Override
   public Table getTable(String catName, String dbName, String tableName, String writeIdList)
       throws MetaException {
     boolean commited = false;
@@ -1807,6 +1801,7 @@ public class ObjectStore implements RawStore, Configurable {
     t.setRewriteEnabled(mtbl.isRewriteEnabled());
     t.setCatName(mtbl.getDatabase().getCatalogName());
     t.setWriteId(mtbl.getWriteId());
+    t.setTemporary(false);
     return t;
   }
 
@@ -2175,7 +2170,7 @@ public class ObjectStore implements RawStore, Configurable {
     MetaStoreServerUtils.validatePartitionNameCharacters(part.getValues(),
         partitionValidationPattern);
     boolean doesExist = doesPartitionExist(part.getCatName(),
-        part.getDbName(), part.getTableName(), partitionKeys, part.getValues());
+        part.getDbName(), part.getTableName(), partitionKeys, part.getValues(), null);
     if (doesExist && !ifNotExists) {
       throw new MetaException("Partition already exists: " + part);
     }
@@ -2296,12 +2291,6 @@ public class ObjectStore implements RawStore, Configurable {
       }
     }
     return success;
-  }
-
-  @Override
-  public Partition getPartition(String catName, String dbName, String tableName,
-      List<String> part_vals) throws NoSuchObjectException, MetaException {
-    return getPartition(catName, dbName, tableName, part_vals, null);
   }
 
   @Override
@@ -2646,13 +2635,13 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public List<Partition> getPartitions(String catName, String dbName, String tableName,
-                                       int maxParts) throws MetaException, NoSuchObjectException {
+                                       int maxParts, String validWriteIdList) throws MetaException, NoSuchObjectException {
     return getPartitionsInternal(catName, dbName, tableName, maxParts, true, true);
   }
 
   @Override
   public Map<String, String> getPartitionLocations(String catName, String dbName, String tblName,
-      String baseLocationToNotShow, int max) {
+      String baseLocationToNotShow, int max, String validWriteIdList) {
     catName = normalizeIdentifier(catName);
     dbName = normalizeIdentifier(dbName);
     tblName = normalizeIdentifier(tblName);
@@ -2719,7 +2708,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public List<Partition> getPartitionsWithAuth(String catName, String dbName, String tblName,
-      short max, String userName, List<String> groupNames)
+      short max, String userName, List<String> groupNames, String validWriteIdList)
           throws MetaException, InvalidObjectException {
     boolean success = false;
     QueryWrapper queryWrapper = new QueryWrapper();
@@ -2752,7 +2741,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public Partition getPartitionWithAuth(String catName, String dbName, String tblName,
-      List<String> partVals, String user_name, List<String> group_names)
+      List<String> partVals, String user_name, List<String> group_names, String validWriteIdList)
       throws NoSuchObjectException, MetaException, InvalidObjectException {
     boolean success = false;
     try {
@@ -2815,7 +2804,7 @@ public class ObjectStore implements RawStore, Configurable {
   // TODO:pc implement max
   @Override
   public List<String> listPartitionNames(String catName, String dbName, String tableName,
-      short max) throws MetaException {
+      short max, String validWriteIdList) throws MetaException {
     List<String> pns = null;
     boolean success = false;
     try {
@@ -2875,7 +2864,7 @@ public class ObjectStore implements RawStore, Configurable {
                                                      String tableName, List<FieldSchema> cols,
                                                      boolean applyDistinct, String filter,
                                                      boolean ascending, List<FieldSchema> order,
-                                                     long maxParts) throws MetaException {
+                                                     long maxParts, String validWriteIdList) throws MetaException {
 
     catName = normalizeIdentifier(catName);
     dbName = dbName.toLowerCase().trim();
@@ -2919,7 +2908,7 @@ public class ObjectStore implements RawStore, Configurable {
     }
 
     if (partitionNames == null) {
-      partitions = getPartitionsByFilter(catName, dbName, tableName, filter, (short) maxParts);
+      partitions = getPartitionsByFilter(catName, dbName, tableName, filter, (short) maxParts, null);
     }
 
     if (partitions != null) {
@@ -3149,7 +3138,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public List<Partition> listPartitionsPsWithAuth(String catName, String db_name, String tbl_name,
-      List<String> part_vals, short max_parts, String userName, List<String> groupNames)
+      List<String> part_vals, short max_parts, String userName, List<String> groupNames, String validWriteIdList)
       throws MetaException, InvalidObjectException, NoSuchObjectException {
     List<Partition> partitions = new ArrayList<>();
     boolean success = false;
@@ -3183,7 +3172,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public List<String> listPartitionNamesPs(String catName, String dbName, String tableName,
-      List<String> part_vals, short max_parts) throws MetaException, NoSuchObjectException {
+      List<String> part_vals, short max_parts, String validWriteIdList) throws MetaException, NoSuchObjectException {
     List<String> partitionNames = new ArrayList<>();
     boolean success = false;
     QueryWrapper queryWrapper = new QueryWrapper();
@@ -3286,7 +3275,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public List<Partition> getPartitionsByNames(String catName, String dbName, String tblName,
-      List<String> partNames) throws MetaException, NoSuchObjectException {
+      List<String> partNames, String validWriteIdList) throws MetaException, NoSuchObjectException {
     return getPartitionsByNamesInternal(catName, dbName, tblName, partNames, true, true);
   }
 
@@ -3310,7 +3299,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public boolean getPartitionsByExpr(String catName, String dbName, String tblName, byte[] expr,
-      String defaultPartitionName, short maxParts, List<Partition> result) throws TException {
+      String defaultPartitionName, short maxParts, List<Partition> result, String validWriteIdList) throws TException {
     return getPartitionsByExprInternal(
         catName, dbName, tblName, expr, defaultPartitionName, maxParts, result, true, true);
   }
@@ -3562,7 +3551,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public List<Partition> getPartitionsByFilter(String catName, String dbName, String tblName,
-      String filter, short maxParts) throws MetaException, NoSuchObjectException {
+      String filter, short maxParts, String validWriteIdList) throws MetaException, NoSuchObjectException {
     return getPartitionsByFilterInternal(catName, dbName, tblName, filter, maxParts, true, true);
   }
 
@@ -3820,7 +3809,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public int getNumPartitionsByFilter(String catName, String dbName, String tblName,
-                                      String filter) throws MetaException, NoSuchObjectException {
+                                      String filter, String validWriteIdList) throws MetaException, NoSuchObjectException {
     final ExpressionTree exprTree = org.apache.commons.lang.StringUtils.isNotEmpty(filter)
         ? PartFilterExprUtil.getFilterParser(filter).tree : ExpressionTree.EMPTY_TREE;
 
@@ -3851,7 +3840,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public int getNumPartitionsByExpr(String catName, String dbName, String tblName,
-                                    byte[] expr) throws MetaException, NoSuchObjectException {
+                                    byte[] expr, String validWriteIdList) throws MetaException, NoSuchObjectException {
     final ExpressionTree exprTree = PartFilterExprUtil.makeExpressionTree(expressionProxy, expr, null);
     final byte[] tempExpr = expr; // Need to be final to pass it to an inner class
 
@@ -3928,7 +3917,7 @@ public class ObjectStore implements RawStore, Configurable {
   @Override
   public List<Partition> getPartitionSpecsByFilterAndProjection(final Table table,
       GetPartitionsProjectionSpec partitionsProjectSpec,
-      final GetPartitionsFilterSpec filterSpec) throws MetaException, NoSuchObjectException {
+      final GetPartitionsFilterSpec filterSpec, String validWriteIdList) throws MetaException, NoSuchObjectException {
     List<String> fieldList = null;
     String inputIncludePattern = null;
     String inputExcludePattern = null;
@@ -8756,17 +8745,6 @@ public class ObjectStore implements RawStore, Configurable {
       String catName,
       String dbName,
       String tableName,
-      List<String> colNames) throws MetaException, NoSuchObjectException {
-    // Note: this will get stats without verifying ACID.
-    return getTableColumnStatisticsInternal(
-        catName, dbName, tableName, colNames, true, true);
-  }
-
-  @Override
-  public ColumnStatistics getTableColumnStatistics(
-      String catName,
-      String dbName,
-      String tableName,
       List<String> colNames,
       String writeIdList) throws MetaException, NoSuchObjectException {
     // If the current stats in the metastore doesn't comply with
@@ -8823,14 +8801,6 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
     }.run(true);
-  }
-
-  @Override
-  public List<ColumnStatistics> getPartitionColumnStatistics(String catName, String dbName, String tableName,
-      List<String> partNames, List<String> colNames) throws MetaException, NoSuchObjectException {
-    // Note: this will get stats without verifying ACID.
-    return getPartitionColumnStatisticsInternal(
-        catName, dbName, tableName, partNames, colNames, true, true);
   }
 
   @Override
@@ -8930,7 +8900,7 @@ public class ObjectStore implements RawStore, Configurable {
         return null;
       }
 
-      Table table = getTable(catName, dbName, tblName);
+      Table table = getTable(catName, dbName, tblName, writeIdList);
       boolean isTxn = TxnUtils.isTransactionalTable(table.getParameters());
       if (isTxn && !areTxnStatsSupported) {
         return null;
@@ -8941,7 +8911,7 @@ public class ObjectStore implements RawStore, Configurable {
       GetPartitionsProjectionSpec ps = new GetPartitionsProjectionSpec();
       ps.setIncludeParamKeyPattern(StatsSetupConst.COLUMN_STATS_ACCURATE + '%');
       ps.setFieldList(Lists.newArrayList("writeId", "parameters", "values"));
-      List<Partition> parts = getPartitionSpecsByFilterAndProjection(table, ps, fs);
+      List<Partition> parts = getPartitionSpecsByFilterAndProjection(table, ps, fs, writeIdList);
 
       // Loop through the given "partNames" list
       // checking isolation-level-compliance of each partition column stats.
@@ -8955,13 +8925,7 @@ public class ObjectStore implements RawStore, Configurable {
         }
       }
     }
-    return get_aggr_stats_for(catName, dbName, tblName, partNames, colNames);
-  }
 
-  @Override
-  public AggrStats get_aggr_stats_for(String catName, String dbName, String tblName,
-      final List<String> partNames, final List<String> colNames)
-      throws MetaException, NoSuchObjectException {
     final boolean useDensityFunctionForNDVEstimation = MetastoreConf.getBoolVar(getConf(),
         ConfVars.STATS_NDV_DENSITY_FUNCTION);
     final double ndvTuner = MetastoreConf.getDoubleVar(getConf(), ConfVars.STATS_NDV_TUNER);
@@ -9616,7 +9580,7 @@ public class ObjectStore implements RawStore, Configurable {
 
   @Override
   public boolean doesPartitionExist(String catName, String dbName, String tableName,
-                                    List<FieldSchema> partKeys, List<String> partVals)
+                                    List<FieldSchema> partKeys, List<String> partVals, String validWriteIdList)
       throws MetaException {
     String name = Warehouse.makePartName(partKeys, partVals);
     return this.getMPartition(catName, dbName, tableName, name) != null;

@@ -56,6 +56,7 @@ import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.common.TableName;
 import org.apache.hadoop.hive.common.ValidReadTxnList;
 import org.apache.hadoop.hive.common.ValidReaderWriteIdList;
 import org.apache.hadoop.hive.common.ValidTxnList;
@@ -1380,10 +1381,24 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
                 quoteString(dbName), quoteString(tblName));
         rs = pStmt.executeQuery();
         if (rs.next()) {
-          LOG.info("Idempotent flow: WriteId state <" + validWriteIdList + "> is already applied for the table: "
-                  + dbName + "." + tblName);
-          rollbackDBConn(dbConn);
-          return;
+          // TODO: Ideally we shall fail in this case, however, currently Hive.java will generate write id
+          // in both regular and repl load flow. I cannot figure out a way to suppress it within repl load scope.
+          // Once we can suppress new write id allocation in Hive.java inside repl load, we can bring this back.
+          LOG.info("Remove writeId state from the table to make it idempotent flow: "
+              + dbName + "." + tblName);
+          sql = "delete from TXN_TO_WRITE_ID where t2w_database = ? and t2w_table = ?";
+          closeStmt(pStmt);
+          pStmt = sqlGenerator.prepareStmtWithParameters(dbConn, sql, params);
+          LOG.debug("Going to execute delete <" + sql.replaceAll("\\?", "{}") + ">",
+              quoteString(dbName), quoteString(tblName));
+          pStmt.executeUpdate();
+
+          sql = "delete from NEXT_WRITE_ID where nwi_database = ? and nwi_table = ?";
+          closeStmt(pStmt);
+          pStmt = sqlGenerator.prepareStmtWithParameters(dbConn, sql, params);
+          LOG.debug("Going to execute delete <" + sql.replaceAll("\\?", "{}") + ">",
+              quoteString(dbName), quoteString(tblName));
+          pStmt.executeUpdate();
         }
 
         if (numAbortedWrites > 0) {
@@ -1501,6 +1516,46 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
       throw new MetaException("invalid write id " + writeId + " for table " + fullTableName);
     } finally {
       close(rs, pst, null);
+    }
+  }
+
+  @Override
+  @RetrySemantics.ReadOnly
+  public GetTxnTableWriteIdsResponse getTxnTableWriteIds(long txnId) throws MetaException {
+    try {
+      PreparedStatement pst = null;
+      ResultSet rs = null;
+      Connection dbConn = null;
+      try {
+        /**
+         * This runs at READ_COMMITTED for exactly the same reason as {@link #getOpenTxnsInfo()}
+         */
+        dbConn = getDbConn(Connection.TRANSACTION_READ_COMMITTED);
+
+        List<String> params = Arrays.asList(Long.toString(txnId));
+        String s = "select t2w_database, t2w_table, t2w_writeid from TXN_TO_WRITE_ID where t2w_txnid = ?";
+        pst = sqlGenerator.prepareStmtWithParameters(dbConn, s, params);
+        LOG.debug("Going to execute query <" + s.replaceAll("\\?", "{}") + ">", txnId);
+        rs = pst.executeQuery();
+        List<TableWriteId> tableWriteIds = new ArrayList<>();
+        if (rs.next()) {
+          tableWriteIds.add(new TableWriteId(TableName.getDbTable(rs.getString(1), rs.getString(2)), rs.getLong(3)));
+        }
+        return new GetTxnTableWriteIdsResponse(tableWriteIds);
+      } catch (SQLException e) {
+        LOG.debug("Going to rollback");
+        rollbackDBConn(dbConn);
+        checkRetryable(dbConn, e, "getTxnTableWriteIds(" + txnId + ")");
+        throw new MetaException("Unable to get target transaction id "
+                + StringUtils.stringifyException(e));
+      } finally {
+        closeStmt(pst);
+        close(rs);
+        closeDbConn(dbConn);
+        unlockInternal();
+      }
+    } catch (RetryException e) {
+      return getTxnTableWriteIds(txnId);
     }
   }
 
@@ -1870,13 +1925,22 @@ abstract class TxnHandler implements TxnStore, TxnStore.MutexAPI {
         dbConn = getDbConn(Connection.TRANSACTION_READ_COMMITTED);
 
         handle = getMutexAPI().acquireLock(MUTEX_KEY.WriteIdAllocator.name());
-        //since this is on conversion from non-acid to acid, NEXT_WRITE_ID should not have an entry
-        //for this table.  It also has a unique index in case 'should not' is violated
+
+        // It is unlikely to happen (unless there's tons of ddl on source table before conversion),
+        // but we'd better check if the next_write_id is already
+        // greater than the seed, if so, we shall fail immediately
+        String s = "delete from NEXT_WRITE_ID where nwi_database = ? and nwi_table = ?";
+        List<String> params = Arrays.asList(rqst.getDbName(), rqst.getTblName());
+        pst = sqlGenerator.prepareStmtWithParameters(dbConn, s, params);
+        LOG.debug("Going to execute delete <" + s.replaceAll("\\?", "{}") + ">",
+            quoteString(rqst.getDbName()), quoteString(rqst.getTblName()));
+        pst.executeUpdate();
+        closeStmt(pst);
 
         // First allocation of write id should add the table to the next_write_id meta table
         // The initial value for write id should be 1 and hence we add 1 with number of write ids
         // allocated here
-        String s = "insert into NEXT_WRITE_ID (nwi_database, nwi_table, nwi_next) values (?, ?, "
+        s = "insert into NEXT_WRITE_ID (nwi_database, nwi_table, nwi_next) values (?, ?, "
                 + Long.toString(rqst.getSeeWriteId() + 1) + ")";
         pst = sqlGenerator.prepareStmtWithParameters(dbConn, s, Arrays.asList(rqst.getDbName(), rqst.getTblName()));
         LOG.debug("Going to execute insert <" + s.replaceAll("\\?", "{}") + ">",

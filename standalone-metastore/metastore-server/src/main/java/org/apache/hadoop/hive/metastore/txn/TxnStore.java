@@ -23,6 +23,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.hive.common.ValidTxnList;
+import org.apache.hadoop.hive.common.ValidTxnWriteIdList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
 import org.apache.hadoop.hive.common.classification.RetrySemantics;
 import org.apache.hadoop.hive.metastore.api.*;
@@ -169,6 +170,9 @@ public interface TxnStore extends Configurable {
   @RetrySemantics.ReadOnly
   GetValidWriteIdsResponse getValidWriteIds(GetValidWriteIdsRequest rqst)
           throws NoSuchTxnException,  MetaException;
+
+  @RetrySemantics.ReadOnly
+  public GetTxnTableWriteIdsResponse getTxnTableWriteIds(long txnId) throws MetaException;
 
   /**
    * Allocate a write ID for the given table and associate it with a transaction

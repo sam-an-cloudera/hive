@@ -149,7 +149,7 @@ public class TestCrudCompactorOnTez {
       deltas[i] = filestatus[i].getPath().getName();
     }
     Arrays.sort(deltas);
-    String[] expectedDeltas = new String[] { "delta_0000001_0000001_0000", "delta_0000002_0000002_0000" };
+    String[] expectedDeltas = new String[] { "delta_0000002_0000002_0000", "delta_0000003_0000003_0000" };
     if (!Arrays.deepEquals(expectedDeltas, deltas)) {
       Assert.fail("Expected: " + Arrays.toString(expectedDeltas) + ", found: " + Arrays.toString(deltas));
     }
@@ -193,7 +193,7 @@ public class TestCrudCompactorOnTez {
       bases[i] = filestatus[i].getPath().getName();
     }
     Arrays.sort(bases);
-    String[] expectedBases = new String[] { "base_0000003_v0000008" };
+    String[] expectedBases = new String[] { "base_0000004_v0000008" };
     if (!Arrays.deepEquals(expectedBases, bases)) {
       Assert.fail("Expected: " + Arrays.toString(expectedBases) + ", found: " + Arrays.toString(bases));
     }
@@ -231,7 +231,7 @@ public class TestCrudCompactorOnTez {
       deltas[i] = filestatus[i].getPath().getName();
     }
     Arrays.sort(deltas);
-    String[] expectedDeltas = new String[] { "delta_0000001_0000001_0000", "delta_0000002_0000002_0000" };
+    String[] expectedDeltas = new String[] { "delta_0000002_0000002_0000", "delta_0000003_0000003_0000" };
     if (!Arrays.deepEquals(expectedDeltas, deltas)) {
       Assert.fail("Expected: " + Arrays.toString(expectedDeltas) + ", found: " + Arrays.toString(deltas));
     }
@@ -243,7 +243,7 @@ public class TestCrudCompactorOnTez {
       deleteDeltas[i] = deleteDeltaStat[i].getPath().getName();
     }
     Arrays.sort(deleteDeltas);
-    String[] expectedDeleteDeltas = new String[] { "delete_delta_0000003_0000003_0000" };
+    String[] expectedDeleteDeltas = new String[] { "delete_delta_0000004_0000004_0000" };
     if (!Arrays.deepEquals(expectedDeleteDeltas, deleteDeltas)) {
       Assert.fail("Expected: " + Arrays.toString(expectedDeleteDeltas) + ", found: " + Arrays.toString(deleteDeltas));
     }
@@ -281,12 +281,12 @@ public class TestCrudCompactorOnTez {
     runCompaction(dbName, tblName, CompactionType.MAJOR, "ds=yesterday", "ds=today");
     runCleaner(conf);
     List<String> expectedRsBucket0PtnToday = new ArrayList<>();
-    expectedRsBucket0PtnToday.add("{\"writeid\":1,\"bucketid\":536870912,\"rowid\":0}\t2\t3\tNULL\ttoday");
-    expectedRsBucket0PtnToday.add("{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t2\t4\tNULL\ttoday");
-    expectedRsBucket0PtnToday.add("{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t3\t3\t1001\ttoday");
+    expectedRsBucket0PtnToday.add("{\"writeid\":2,\"bucketid\":536870912,\"rowid\":0}\t2\t3\tNULL\ttoday");
+    expectedRsBucket0PtnToday.add("{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t2\t4\tNULL\ttoday");
+    expectedRsBucket0PtnToday.add("{\"writeid\":4,\"bucketid\":536870912,\"rowid\":0}\t3\t3\t1001\ttoday");
     List<String> expectedRsBucket1PtnToday = new ArrayList<>();
-    expectedRsBucket1PtnToday.add("{\"writeid\":1,\"bucketid\":536936448,\"rowid\":1}\t1\t3\tNULL\ttoday");
-    expectedRsBucket1PtnToday.add("{\"writeid\":3,\"bucketid\":536936448,\"rowid\":1}\t4\t4\t1005\ttoday");
+    expectedRsBucket1PtnToday.add("{\"writeid\":2,\"bucketid\":536936448,\"rowid\":1}\t1\t3\tNULL\ttoday");
+    expectedRsBucket1PtnToday.add("{\"writeid\":4,\"bucketid\":536936448,\"rowid\":1}\t4\t4\t1005\ttoday");
     // Bucket 0, partition 'today'
     List<String> rsCompactBucket0PtnToday = executeStatementOnDriverAndReturnResults("select ROW__ID, * from  "
         + tblName + " where ROW__ID.bucketid = 536870912 and ds='today'", driver);
@@ -325,15 +325,15 @@ public class TestCrudCompactorOnTez {
     runCompaction(dbName, tblName, CompactionType.MAJOR, "ds=yesterday", "ds=today");
     runCleaner(hiveConf);
     List<String> expectedRsPtnToday = new ArrayList<>();
-    expectedRsPtnToday.add("{\"writeid\":1,\"bucketid\":536870912,\"rowid\":1}\t1\t3\tNULL\ttoday");
-    expectedRsPtnToday.add("{\"writeid\":1,\"bucketid\":536870912,\"rowid\":2}\t2\t3\tNULL\ttoday");
-    expectedRsPtnToday.add("{\"writeid\":1,\"bucketid\":536870912,\"rowid\":3}\t2\t4\tNULL\ttoday");
-    expectedRsPtnToday.add("{\"writeid\":3,\"bucketid\":536870912,\"rowid\":0}\t3\t3\t1001\ttoday");
-    expectedRsPtnToday.add("{\"writeid\":3,\"bucketid\":536870912,\"rowid\":2}\t4\t4\t1005\ttoday");
+    expectedRsPtnToday.add("{\"writeid\":2,\"bucketid\":536870912,\"rowid\":1}\t1\t3\tNULL\ttoday");
+    expectedRsPtnToday.add("{\"writeid\":2,\"bucketid\":536870912,\"rowid\":2}\t2\t3\tNULL\ttoday");
+    expectedRsPtnToday.add("{\"writeid\":2,\"bucketid\":536870912,\"rowid\":3}\t2\t4\tNULL\ttoday");
+    expectedRsPtnToday.add("{\"writeid\":4,\"bucketid\":536870912,\"rowid\":0}\t3\t3\t1001\ttoday");
+    expectedRsPtnToday.add("{\"writeid\":4,\"bucketid\":536870912,\"rowid\":2}\t4\t4\t1005\ttoday");
     List<String> expectedRsPtnYesterday = new ArrayList<>();
-    expectedRsPtnYesterday.add("{\"writeid\":1,\"bucketid\":536936448,\"rowid\":0}\t1\t4\tNULL\tyesterday");
-    expectedRsPtnYesterday.add("{\"writeid\":3,\"bucketid\":536936448,\"rowid\":1}\t3\t4\t1002\tyesterday");
-    expectedRsPtnYesterday.add("{\"writeid\":3,\"bucketid\":536936448,\"rowid\":2}\t4\t3\t1004\tyesterday");
+    expectedRsPtnYesterday.add("{\"writeid\":2,\"bucketid\":536936448,\"rowid\":0}\t1\t4\tNULL\tyesterday");
+    expectedRsPtnYesterday.add("{\"writeid\":4,\"bucketid\":536936448,\"rowid\":1}\t3\t4\t1002\tyesterday");
+    expectedRsPtnYesterday.add("{\"writeid\":4,\"bucketid\":536936448,\"rowid\":2}\t4\t3\t1004\tyesterday");
     // Partition 'today'
     List<String> rsCompactPtnToday = executeStatementOnDriverAndReturnResults("select ROW__ID, * from  " + tblName
         + " where ds='today'", driver);
