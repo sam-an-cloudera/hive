@@ -46,6 +46,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
+import com.google.common.io.Files;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -112,6 +113,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
+import org.spark_project.jetty.server.SessionManager;
 
 /**
  * SessionState encapsulates common data associated with a session.
@@ -129,7 +131,8 @@ public class SessionState {
   private static final String TMP_TABLE_SPACE_KEY = "_hive.tmp_table_space";
   static final String LOCK_FILE_NAME = "inuse.lck";
   static final String INFO_FILE_NAME = "inuse.info";
-
+  private static File udfFileDir;
+  private static ConcurrentHashMap<String, String> udfLocalResource = null;//<md5sum or etag, local path>
   /**
    * Concurrent since SessionState is often propagated to workers in thread pools
    */
@@ -431,8 +434,10 @@ public class SessionState {
         parentLoader, Collections.emptyList(), true);
     final ClassLoader currentLoader = AccessController.doPrivileged(addAction);
     this.sessionConf.setClassLoader(currentLoader);
+    Map<String, String> udfCacheMap = getUDFCacheMap();
+    File udfCacheDir = getUdfFileDir();
     resourceDownloader = new ResourceDownloader(conf,
-        HiveConf.getVar(conf, ConfVars.DOWNLOADED_RESOURCES_DIR));
+        HiveConf.getVar(conf, ConfVars.DOWNLOADED_RESOURCES_DIR), udfCacheMap, udfCacheDir);
     killQuery = new NullKillQuery();
   }
 
@@ -470,6 +475,23 @@ public class SessionState {
       final String[] names = currThreadName.split(logPrefix);
       LOG.debug("Resetting thread name to {}", names[names.length - 1]);
       Thread.currentThread().setName(names[names.length - 1].trim());
+    }
+  }
+  public static Map<String, String> getUDFCacheMap(){
+    synchronized (SessionState.class){
+      if(udfLocalResource == null){
+        udfLocalResource = new ConcurrentHashMap<>();
+      }
+      return udfLocalResource;
+    }
+  }
+
+  public static File getUdfFileDir(){
+    synchronized (SessionState.class){
+      if(udfFileDir == null){
+          udfFileDir = Files.createTempDir();
+      }
+      return udfFileDir;
     }
   }
 
@@ -1504,6 +1526,7 @@ public class SessionState {
     Map<String, Set<String>> resourcePathMap = resourceMaps.getResourcePathMap(t);
     Map<String, Set<String>> reverseResourcePathMap = resourceMaps.getReverseResourcePathMap(t);
     List<String> localized = new ArrayList<String>();
+
     try {
       for (String value : values) {
         String key;
@@ -2164,5 +2187,4 @@ class ResourceMaps {
     }
     return result;
   }
-
 }

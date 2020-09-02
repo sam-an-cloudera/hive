@@ -20,6 +20,7 @@ package org.apache.hive.service.server;
 
 import com.google.common.base.Joiner;
 import java.io.IOException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -27,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,6 +53,7 @@ import org.apache.curator.framework.api.CuratorEventType;
 import org.apache.curator.framework.recipes.leader.LeaderLatch;
 import org.apache.curator.framework.recipes.leader.LeaderLatchListener;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.common.JvmPauseMonitor;
 import org.apache.hadoop.hive.common.LogUtils;
 import org.apache.hadoop.hive.common.LogUtils.LogInitializationException;
@@ -165,6 +169,8 @@ public class HiveServer2 extends CompositeService {
   private SettableFuture<Boolean> notLeaderTestFuture = SettableFuture.create();
   private ZooKeeperHiveHelper zooKeeperHelper = null;
   private ScheduledQueryExecutionService scheduledQueryService;
+  private static ConcurrentHashMap<String, String> udfLocalResource = null;//<md5sum or etag, local path>
+  private static String udfFileDir = null;
 
   public HiveServer2() {
     super(HiveServer2.class.getSimpleName());
@@ -279,6 +285,8 @@ public class HiveServer2 extends CompositeService {
       scheduledQueryService = ScheduledQueryExecutionService.startScheduledQueryExecutorService(hiveConf);
     }
 
+    udfLocalResource = new ConcurrentHashMap<>();
+    //udfFileCache =
     // Setup cache if enabled.
     if (hiveConf.getBoolVar(HiveConf.ConfVars.HIVE_QUERY_RESULTS_CACHE_ENABLED)) {
       try {
@@ -1503,6 +1511,31 @@ public class HiveServer2 extends CompositeService {
         System.exit(-1);
       }
       System.exit(0);
+    }
+  }
+
+  public static Map<String, String> getUDFCacheMap(){
+    synchronized (HiveServer2.class){
+      if(udfLocalResource == null){
+        udfLocalResource = new ConcurrentHashMap<>();
+      }
+      return udfLocalResource;
+    }
+  }
+
+  public static String getUdfFileDir(){
+    synchronized (HiveServer2.class){
+      if(udfFileDir == null){
+        UUID uuid = UUID.randomUUID();
+        udfFileDir = "file:/tmp/"+uuid.toString();
+        URI fileURI = URI.create(udfFileDir);
+        try {
+          FileSystem fs = FileSystem.get(fileURI, new HiveConf());
+        }catch(IOException ioe){
+          LOG.error("Cannot create file cache for UDF");
+        }
+      }
+      return udfFileDir;
     }
   }
 }

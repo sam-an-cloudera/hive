@@ -565,6 +565,12 @@ public class Registry {
         }
         mFunctions.remove(functionName);
         fi.discarded();
+        FunctionResource[] resources = fi.getResources();
+        Map<String, String> udfCacheMap = SessionState.getUDFCacheMap();
+        for(FunctionResource fr : resources){
+          //remove from udf cache if it's saved.
+          udfCacheMap.remove(fr.getResourceURI());
+        }
         if (fi.isPersistent()) {
           removePersistentFunctionUnderLock(fi);
         }
