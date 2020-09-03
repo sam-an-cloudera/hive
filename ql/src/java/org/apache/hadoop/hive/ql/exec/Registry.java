@@ -565,7 +565,13 @@ public class Registry {
         }
         mFunctions.remove(functionName);
         fi.discarded();
+        FunctionResource[] resources = fi.getResources();
         if (fi.isPersistent()) {
+          Map<String, String> udfCacheMap = SessionState.getUDFCacheMap();
+          for(FunctionResource fr : resources){
+            //remove from udf cache if it's saved.
+            udfCacheMap.remove(fr.getResourceURI());
+          }
           removePersistentFunctionUnderLock(fi);
         }
       }
@@ -648,7 +654,8 @@ public class Registry {
       // At this point we should add any relevant jars that would be needed for the UDf.
       FunctionResource[] resources = function.getResources();
       try {
-        FunctionUtils.addFunctionResources(resources);
+        boolean useCache = function.isPersistent();
+        FunctionUtils.addFunctionResources(resources, useCache);
       } catch (Exception e) {
         LOG.error("Unable to load resources for " + qualifiedName + ":" + e, e);
         return null;
